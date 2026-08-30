@@ -1,0 +1,32 @@
+{
+  "name": "magpie",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Magpie collects what every site can do, and composes those capabilities into reusable workflows.",
+  "scripts": {
+    "build": "node scripts/make-icons.mjs && node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "web:build": "node scripts/make-icons.mjs && node scripts/build-web.mjs",
+    "web:dev": "node scripts/build-web.mjs --serve",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs && node scripts/check-demos.mjs",
+    "demos": "node scripts/serve-demos.mjs",
+    "demos:build": "node scripts/build-demos.mjs",
+    "build:all": "npm run build && npm run web:build && npm run demos:build",
+    "release": "npm run build && rm -f magpie-extension.zip && (cd dist && zip -qr ../magpie-extension.zip .) && echo '[release] magpie-extension.zip \u2014 attach this to the GitHub release'"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/node": "^20.19.43",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "esbuild": "^0.23.1",
+    "typescript": "^5.5.4"
+  }
+}

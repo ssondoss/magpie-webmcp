@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "Magpie",
+  "version": "0.1.0",
+  "description": "Collects what every site can do through WebMCP, and composes those capabilities into reusable workflows.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "tabs",
+    "downloads",
+    "scripting",
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open Magpie",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content-main.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content-bridge.js"
+      ],
+      "run_at": "document_start",
+      "world": "ISOLATED",
+      "all_frames": false
+    }
+  ]
+}

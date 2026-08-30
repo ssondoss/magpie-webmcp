@@ -1,0 +1,13 @@
+node_modules/
+dist/
+web-dist/
+demo-dist/
+.tmp/
+*.log
+.claude/
+.DS_Store
+.vercel/
+.netlify/
+magpie-extension.zip
+VIDEO.md
+DEPLOY.md

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The extension uses this to namespace the site's capabilities as `orders.*`. -->
+    <meta name="webmcp-provider" content="Northwind Orders" />
+    <title>Northwind Orders</title>
+    <link rel="stylesheet" href="/shared/demo.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>Northwind Orders</h1>
+      <span class="muted" id="toolStatus">registering WebMCP tools…</span>
+    </header>
+
+    <main>
+      <section>
+        <h2>WebMCP capabilities exposed by this page</h2>
+        <ul class="tools" id="toolList"></ul>
+        <p class="muted">
+          Registered with <code>navigator.modelContext.registerTool()</code>. No workflow UI exists on this page —
+          composition is the agent's job.
+        </p>
+        <div class="row" style="margin-top: 12px">
+          <button id="driftBtn">Simulate tool drift (search_orders → find_orders)</button>
+          <span class="muted" id="driftState">stable</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Orders</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Status</th>
+              <th>Amount</th>
+              <th>Placed</th>
+              <th>Promised</th>
+              <th>Days late</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Tool call log</h2>
+        <div class="log" id="log">no calls yet</div>
+      </section>
+    </main>
+
+    <script src="/shared/webmcp-shim.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

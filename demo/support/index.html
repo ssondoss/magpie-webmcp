@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="webmcp-provider" content="Helpdesk Support" />
+    <title>Helpdesk Support</title>
+    <link rel="stylesheet" href="/shared/demo.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>Helpdesk Support</h1>
+      <span class="muted" id="toolStatus">…</span>
+    </header>
+
+    <main>
+      <div class="banner" id="authBanner" hidden>
+        You are signed out, so this page exposes no WebMCP capabilities. The extension will report
+        <strong>AUTH_REQUIRED</strong> until you sign in — it never handles credentials itself.
+      </div>
+
+      <section>
+        <h2>Session</h2>
+        <div class="row">
+          <span id="sessionState" class="muted"></span>
+          <button id="authBtn" class="primary">Sign in</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>WebMCP capabilities exposed by this page</h2>
+        <ul class="tools" id="toolList"></ul>
+      </section>
+
+      <section>
+        <h2>Tickets</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Ticket</th>
+              <th>Title</th>
+              <th>Priority</th>
+              <th>Related order</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="ticketsBody"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Tool call log</h2>
+        <div class="log" id="log">no calls yet</div>
+      </section>
+    </main>
+
+    <script src="/shared/webmcp-shim.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

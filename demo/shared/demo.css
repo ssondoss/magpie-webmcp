@@ -1,0 +1,173 @@
+:root {
+  --bg: #0e1014;
+  --card: #171a21;
+  --border: #262b35;
+  --text: #e8ebf1;
+  --muted: #9aa4b6;
+  --accent: #6aa2ff;
+  --ok: #4ec98b;
+  --warn: #e8b046;
+  --bad: #f16a6a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+header.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+header.top h1 {
+  font-size: 16px;
+  margin: 0;
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px 24px 60px;
+}
+
+section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.pill.delayed {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.pill.shipped,
+.pill.delivered,
+.pill.open {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.pill.cancelled,
+.pill.down {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.pill.up {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.tools li {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--accent);
+  margin-bottom: 3px;
+}
+
+.tools {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+button {
+  font: inherit;
+  background: #222833;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b1220;
+  font-weight: 600;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.banner {
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
