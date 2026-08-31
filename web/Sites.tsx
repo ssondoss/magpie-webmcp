@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ToolDescriptor } from '../src/shared/types';
 import type { ExtensionCapability } from './app/extension';
 import { forgetSite, openSite } from './app/extension';
@@ -95,6 +95,58 @@ function Idea({ idea }: { idea: ReturnType<typeof pairings>[number] }) {
         {copied ? '✓ Copied' : 'Copy prompt'}
       </button>
     </li>
+  );
+}
+
+/**
+ * A tool description, clamped to three lines so a site's card stays scannable.
+ *
+ * Sites Magpie did not write — the third-party ones the registry exists for —
+ * routinely write descriptions several times longer than the demos do, and a
+ * clamp with no way past it hides the very thing a visitor is reading the card
+ * for. So the full text is one click away.
+ *
+ * The toggle is only wired up when the text is *measured* as overflowing, rather
+ * than guessed at from its length: a short description that advertises an
+ * expander doing nothing is worse than no expander at all.
+ */
+function CapDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [clamped, setClamped] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || open) return;
+    // Only meaningful while collapsed — the clamp is what makes the content overflow.
+    setClamped(node.scrollHeight > node.clientHeight + 1);
+  }, [text, open]);
+
+  if (!text) return null;
+
+  const interactive = clamped || open;
+  const toggle = (): void => setOpen((value) => !value);
+
+  return (
+    <p
+      ref={ref}
+      className={`${interactive ? 'clampable' : ''}${open ? ' open' : ''}`}
+      // The tooltip covers a pointer; the click covers touch, where none appears.
+      title={interactive && !open ? text : undefined}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-expanded={interactive ? open : undefined}
+      onClick={interactive ? toggle : undefined}
+      onKeyDown={(event) => {
+        if (!interactive) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggle();
+        }
+      }}
+    >
+      {text}
+    </p>
   );
 }
 
@@ -260,7 +312,7 @@ export function Sites({ own, extension, onChanged }: Props) {
                     {item.write ? <span className="tag write">writes</span> : null}
                   </div>
                   <code title={item.name}>{item.name}</code>
-                  <p>{item.description}</p>
+                  <CapDescription text={item.description} />
                 </li>
               ))}
             </ul>

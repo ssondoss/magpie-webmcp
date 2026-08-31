@@ -11,7 +11,7 @@ const APPS = [
   { port: 4321, root: resolve('demo/orders'), name: 'Northwind Orders' },
   { port: 4322, root: resolve('demo/support'), name: 'Helpdesk Support' },
   { port: 4323, root: resolve('demo/metals'), name: 'Bullion Desk' },
-  { port: 4324, root: resolve('demo/wallet'), name: 'Kestrel Wallet' },
+  { port: 4324, root: resolve('demo/crypto'), name: 'Crypto Desk' },
 ];
 const SHARED = resolve('demo/shared');
 

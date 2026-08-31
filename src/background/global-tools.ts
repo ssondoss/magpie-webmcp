@@ -66,6 +66,35 @@ function asText(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
+/**
+ * `wa.me` takes a bare international number: digits only, country code included,
+ * no `+` and no national trunk prefix. Punctuation is accepted because agents copy
+ * numbers straight out of page text, where they arrive formatted for humans.
+ *
+ * The two rejections are the mistakes that actually happen. A trunk-prefixed
+ * number resolves to the wrong country rather than failing, so catching it here
+ * is the difference between an error and a message to a stranger.
+ */
+export function whatsappNumber(raw: unknown): string {
+  const original = String(raw ?? '').trim();
+  const digits = original.replace(/\D/g, '');
+  if (!digits) {
+    throw new Error(`send_whatsapp_message needs a phone number, got "${original}"`);
+  }
+  if (digits.startsWith('0')) {
+    throw new Error(
+      `send_whatsapp_message needs a country code, but "${original}" starts with a trunk prefix. Use international format, e.g. +971501234567.`,
+    );
+  }
+  // E.164 allows at most 15 digits; fewer than 8 is never a reachable mobile number.
+  if (digits.length < 8 || digits.length > 15) {
+    throw new Error(
+      `send_whatsapp_message got ${digits.length} digits ("${original}"); an international number has 8 to 15.`,
+    );
+  }
+  return digits;
+}
+
 /** Panel-first because the panel document can create Blob URLs; SW falls back to data URLs. */
 async function download(
   context: GlobalToolContext,
@@ -88,6 +117,108 @@ const objectSchema = (properties: JsonObject, required: string[] = []): JsonObje
   properties,
   required,
 });
+
+/**
+ * Both calendar targets want the same instant in UTC basic format
+ * (`20260901T090000Z`) — Google in its `dates` parameter, iCalendar in DTSTART.
+ */
+function calendarStamp(date: Date): string {
+  return `${date.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`;
+}
+
+/**
+ * Resolves the event window from an ISO start plus either an explicit end or a
+ * duration.
+ *
+ * A bare date (`2026-09-01`) is rejected rather than assumed to mean midnight:
+ * an agent that drops the time would otherwise book a 3 AM meeting that looks
+ * deliberate. Asking again costs a step; a wrong invitation costs a person's time.
+ */
+export function eventWindow(args: {
+  start?: unknown;
+  end?: unknown;
+  durationMinutes?: unknown;
+}): { start: Date; end: Date } {
+  const rawStart = String(args.start ?? '').trim();
+  if (!rawStart) throw new Error('create_calendar_event needs a start time');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
+    throw new Error(
+      `create_calendar_event needs a time of day, not just a date ("${rawStart}"). Use an ISO timestamp, e.g. 2026-09-01T09:00:00Z.`,
+    );
+  }
+  const start = new Date(rawStart);
+  if (Number.isNaN(start.getTime())) {
+    throw new Error(`create_calendar_event could not read the start time "${rawStart}"`);
+  }
+
+  const rawEnd = String(args.end ?? '').trim();
+  if (rawEnd) {
+    const end = new Date(rawEnd);
+    if (Number.isNaN(end.getTime())) {
+      throw new Error(`create_calendar_event could not read the end time "${rawEnd}"`);
+    }
+    if (end <= start) {
+      throw new Error(`create_calendar_event got an end time ("${rawEnd}") at or before the start ("${rawStart}")`);
+    }
+    return { start, end };
+  }
+
+  const minutes = typeof args.durationMinutes === 'number' ? args.durationMinutes : 30;
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    throw new Error(`create_calendar_event needs a positive durationMinutes, got ${String(args.durationMinutes)}`);
+  }
+  return { start, end: new Date(start.getTime() + minutes * 60_000) };
+}
+
+function attendeeList(input: unknown): string[] {
+  const raw = typeof input === 'string' ? input.split(/[,;\s]+/) : toArray(input).map(String);
+  return raw.map((entry) => entry.trim()).filter((entry) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry));
+}
+
+/** Folds long lines to 75 octets and escapes the delimiters, as iCalendar requires. */
+function icsLine(name: string, value: string): string {
+  const escaped = value.replace(/\\/g, '\\\\').replace(/[;,]/g, (match) => `\\${match}`).replace(/\r?\n/g, '\\n');
+  const line = `${name}:${escaped}`;
+  if (line.length <= 75) return line;
+  const parts = [line.slice(0, 75)];
+  for (let index = 75; index < line.length; index += 74) {
+    // A continuation line starts with a single space.
+    parts.push(` ${line.slice(index, index + 74)}`);
+  }
+  return parts.join('\r\n');
+}
+
+export function buildIcs(event: {
+  title: string;
+  start: Date;
+  end: Date;
+  description?: string;
+  location?: string;
+  attendees: string[];
+}): string {
+  const uid = `${calendarStamp(event.start)}-${Math.random().toString(36).slice(2, 10)}@magpie`;
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Magpie//WebMCP//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    icsLine('UID', uid),
+    `DTSTAMP:${calendarStamp(new Date())}`,
+    `DTSTART:${calendarStamp(event.start)}`,
+    `DTEND:${calendarStamp(event.end)}`,
+    icsLine('SUMMARY', event.title),
+  ];
+  if (event.description) lines.push(icsLine('DESCRIPTION', event.description));
+  if (event.location) lines.push(icsLine('LOCATION', event.location));
+  for (const attendee of event.attendees) {
+    lines.push(icsLine('ATTENDEE;RSVP=TRUE', `mailto:${attendee}`));
+  }
+  lines.push('END:VEVENT', 'END:VCALENDAR');
+  // iCalendar is CRLF-delimited; some clients reject bare LF.
+  return `${lines.join('\r\n')}\r\n`;
+}
 
 export const GLOBAL_TOOLS: Record<string, GlobalTool> = {
   export_csv: {
@@ -211,6 +342,121 @@ export const GLOBAL_TOOLS: Record<string, GlobalTool> = {
 
       const tab = await chrome.tabs.create({ url, active: false });
       return { drafted: true, to, subject, sent: false, tabId: tab.id ?? null };
+    },
+  },
+
+  create_calendar_event: {
+    risk: 'write',
+    // The .ics path is purely local, but the Google path opens a form listing real
+    // attendees. The stricter of the two decides, so the gate never depends on a
+    // setting the agent cannot see.
+    local: false,
+    descriptor: {
+      name: 'create_calendar_event',
+      description:
+        'Create a calendar event or meeting. Depending on the user setting this either opens a pre-filled Google Calendar form or downloads an .ics file — either way the user confirms it themselves, so this does NOT put anything on a calendar on its own and does NOT invite anyone until they save it.',
+      inputSchema: objectSchema(
+        {
+          title: { type: 'string', description: 'Event title, e.g. "Follow-up on delayed order SO-1"' },
+          start: {
+            type: 'string',
+            description:
+              'Start as an ISO 8601 timestamp including a time of day, e.g. 2026-09-01T09:00:00Z. A date alone is rejected.',
+          },
+          end: { type: 'string', description: 'Optional ISO 8601 end. Omit to use durationMinutes instead.' },
+          durationMinutes: {
+            type: 'number',
+            description: 'Length in minutes when no end is given. Defaults to 30.',
+          },
+          attendees: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional guest email addresses. Invalid entries are dropped.',
+          },
+          description: { type: 'string', description: 'Optional agenda or notes' },
+          location: { type: 'string', description: 'Optional location or meeting link' },
+        },
+        ['title', 'start'],
+      ),
+      annotations: { title: 'Create calendar event' },
+    },
+    async execute(args, context) {
+      const title = String(args.title ?? '').trim();
+      if (!title) throw new Error('create_calendar_event needs a title');
+      const { start, end } = eventWindow(args);
+      const attendees = attendeeList(args.attendees);
+      const description = asText(args.description).slice(0, 1800);
+      const location = String(args.location ?? '').trim();
+
+      if (context.settings.calendarClient === 'ics') {
+        const ics = buildIcs({ title, start, end, description, location, attendees });
+        const file = safeFilename(`${title}.ics`, 'meeting.ics');
+        const result = await download(context, file, ics, 'text/calendar');
+        return {
+          ...(isPlainObject(result) ? result : {}),
+          created: false,
+          attendees,
+          start: start.toISOString(),
+          end: end.toISOString(),
+        } as JsonValue;
+      }
+
+      const params = new URLSearchParams({
+        action: 'TEMPLATE',
+        text: title,
+        dates: `${calendarStamp(start)}/${calendarStamp(end)}`,
+      });
+      if (description) params.set('details', description);
+      if (location) params.set('location', location);
+      // Google takes guests as a repeated `add` parameter, one per address.
+      for (const attendee of attendees) params.append('add', attendee);
+
+      const url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+      const tab = await chrome.tabs.create({ url, active: false });
+      return {
+        drafted: true,
+        created: false,
+        title,
+        start: start.toISOString(),
+        end: end.toISOString(),
+        attendees,
+        tabId: tab.id ?? null,
+      };
+    },
+  },
+
+  send_whatsapp_message: {
+    risk: 'write',
+    // Nothing is transmitted — WhatsApp opens with the message pre-filled and the
+    // user presses Send — but it is addressed to a real person, so it still
+    // deserves the approval gate, exactly like compose_email.
+    local: false,
+    descriptor: {
+      name: 'send_whatsapp_message',
+      description:
+        'Open WhatsApp with a pre-filled message to a phone number. The user reviews it and presses send themselves — this does NOT send the message on its own. The number must include a country code. Use one call per recipient.',
+      inputSchema: objectSchema(
+        {
+          to: {
+            type: 'string',
+            description:
+              'Recipient phone number in international format, e.g. +971501234567. Spaces, dashes and brackets are fine; a leading 0 is not, because WhatsApp needs a country code.',
+          },
+          text: { type: 'string', description: 'Plain-text message body' },
+        },
+        ['to', 'text'],
+      ),
+      annotations: { title: 'Send WhatsApp message' },
+    },
+    async execute(args) {
+      const to = whatsappNumber(args.to);
+      // The message travels inside the URL, so keep the link openable.
+      const text = asText(args.text).slice(0, 1800);
+      if (!text) throw new Error('send_whatsapp_message received empty text');
+
+      const url = `https://wa.me/${to}?text=${encodeURIComponent(text)}`;
+      const tab = await chrome.tabs.create({ url, active: false });
+      return { drafted: true, to: `+${to}`, sent: false, tabId: tab.id ?? null };
     },
   },
 

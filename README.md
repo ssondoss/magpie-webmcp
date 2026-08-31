@@ -32,7 +32,7 @@ sort, download. Nothing is mocked.
 to *"find delayed orders over $5,000 on Northwind Orders and open a Helpdesk ticket for each"*. That
 workflow spans two different origins plus the extension's own tools. This is what the video shows.
 
-**The one that needs no explaining.** Open Bullion Desk (`:4323`) and Kestrel Wallet (`:4324`) and ask
+**The one that needs no explaining.** Open Bullion Desk (`:4323`) and Crypto Desk (`:4324`) and ask
 for *"if gold is above $3,500 and I have at least $1,000 free, buy $1,000 of BTC"*. One site's price
 decides whether another site's purchase happens — a decision neither site could ever have shipped,
 because neither can see the other.
@@ -41,7 +41,7 @@ because neither can see the other.
 
 | | |
 |---|---|
-| Exposing tools | [web/app/tools.ts](web/app/tools.ts), [demo/orders/app.js](demo/orders/app.js), [demo/support/app.js](demo/support/app.js), [demo/metals/app.js](demo/metals/app.js), [demo/wallet/app.js](demo/wallet/app.js) |
+| Exposing tools | [web/app/tools.ts](web/app/tools.ts), [demo/orders/app.js](demo/orders/app.js), [demo/support/app.js](demo/support/app.js), [demo/metals/app.js](demo/metals/app.js), [demo/crypto/app.js](demo/crypto/app.js) |
 | Discovering tools | [src/content/main-world.ts](src/content/main-world.ts) — polyfill + observer, MAIN world |
 | One registry across sites | [src/background/registry.ts](src/background/registry.ts) |
 | Executing across origins | [src/background/engine.ts](src/background/engine.ts), [resolver.ts](src/background/resolver.ts) |
@@ -82,7 +82,7 @@ npm run demos          # four demo sites → :4321 :4322 :4323 :4324
 3. Drive it with whatever agent you use, or press **Run** on a saved workflow.
 
 Nothing to configure. The extension's Settings tab holds only what its own action tools need — a
-Slack webhook, a mail client, and whether to reopen a closed site mid-run.
+Slack webhook, a mail client, a calendar target, and whether to reopen a closed site mid-run.
 
 ## The four versions
 
@@ -178,13 +178,13 @@ Five step types:
   "instruction": "Keep the ones that look like supplier problems" }
 { "id": "s4", "type": "gate",      "condition": { "all": [
     { "field": "spot.quotes.0.price", "operator": ">",  "value": 3500 },
-    { "field": "wallet.available.USD", "operator": ">=", "value": 1000 } ] } }
+    { "field": "balances.available.USD", "operator": ">=", "value": 1000 } ] } }
 { "id": "s5", "type": "missing",   "capability": "refund_order", "reason": "..." }
 ```
 
 ### Extension tools
 
-Seven, in the same registry shape as page tools ([global-tools.ts](src/background/global-tools.ts)):
+Nine, in the same registry shape as page tools ([global-tools.ts](src/background/global-tools.ts)):
 
 | Tool | Setup | Side effect |
 |---|---|---|
@@ -193,10 +193,20 @@ Seven, in the same registry shape as page tools ([global-tools.ts](src/backgroun
 | `notify` | none | desktop notification |
 | `open_url` | none | opens a tab |
 | `compose_email` | choose Gmail or your mail app | opens a **draft** — never sends by itself |
+| `create_calendar_event` | choose Google Calendar or `.ics` | opens a **pre-filled event** — never books by itself |
+| `send_whatsapp_message` | none | opens WhatsApp **pre-filled** — never sends by itself |
 | `send_slack_message` | paste an incoming-webhook URL | posts immediately |
 
-`compose_email` and `send_slack_message` are outward-facing, so they trip the approval prompt. The
-gate is about what a capability *does*, not whether a site or the extension provides it.
+`compose_email`, `create_calendar_event`, `send_whatsapp_message` and `send_slack_message` are
+outward-facing, so they trip the approval prompt. The gate is about what a capability *does*, not
+whether a site or the extension provides it — and it applies to the three drafting tools even though
+none of them transmits anything, because each one addresses a real person.
+
+WhatsApp has no equivalent of a Slack incoming webhook, so `send_whatsapp_message` opens a `wa.me`
+deep link rather than calling an API. That keeps it setup-free, and it is the honest shape for this
+project: the Business Cloud API would need a Meta account and a bearer token, and it only permits
+free-form text within 24 hours of the recipient messaging you — outside that window it demands a
+pre-approved template, which an unattended watch job could not satisfy.
 
 A tool awaiting one-time setup reports `AUTH_REQUIRED` with a hint, exactly like a site awaiting
 sign-in, so a run parks with an actionable message instead of failing halfway.
@@ -216,7 +226,7 @@ same condition grammar as `filter`, evaluated against the run's variables rather
 what lets one site's price gate another site's purchase:
 
 ```text
-Gold price (Bullion Desk) → Wallet balance (Kestrel) → ✓ gold > 3500 and USD ≥ 1000 → Quote → Buy
+Gold price (Bullion Desk) → Cash balance (Crypto Desk) → ✓ gold > 3500 and USD ≥ 1000 → Quote → Buy
 ```
 
 Stopping is a **success**, not a failure. The run ends as `conditions_not_met`, the steps below are
@@ -281,14 +291,14 @@ Four static sites, each on its own origin, each exposing real WebMCP tools:
 | **Northwind Orders** | 4321 | <https://northwind-orders.vercel.app> | `northwind_orders` | `search_orders`, `find_orders`, `get_order`, `get_customer` |
 | **Helpdesk Support** | 4322 | <https://helpdesk-support.vercel.app> | `helpdesk_support` | `create_ticket`, `list_tickets` |
 | **Bullion Desk** | 4323 | <https://bullion-desk-eight.vercel.app> | `bullion_desk` | `get_spot`, `get_history`, `list_instruments` |
-| **Kestrel Wallet** | 4324 | <https://kestrel-wallet.vercel.app> | `kestrel_wallet` | `get_balances`, `get_quote`, `execute_quote`, `list_trades` |
+| **Crypto Desk** | 4324 | <https://crypto-desk.vercel.app> | `crypto_desk` | `get_balances`, `get_quote`, `execute_quote`, `list_trades` |
 
 Separate ports mean separate origins, so composing across them is genuinely cross-site rather than
 staged. The namespaces come from each page's `<meta name="webmcp-provider">` rather than its hostname,
 so they are identical whether a demo is served on localhost or on Vercel — a workflow saved against
 one resolves against the other.
 
-Support can be signed out, which is how `AUTH_REQUIRED` is demonstrated. Wallet enforces its own
+Support can be signed out, which is how `AUTH_REQUIRED` is demonstrated. Crypto Desk enforces its own
 $1,500 per-trade ceiling, refuses replayed idempotency keys, and expires quotes — a second,
 independent limit that holds regardless of what a workflow asks for.
 
@@ -308,7 +318,7 @@ independent limit that holds regardless of what a workflow asks for.
   is stubbed at the `window.postMessage` seam, so the real client is exercised rather than a mock.
 - **Demo apps** (`scripts/check-demos.mjs`) — executes each demo's real script against a DOM stub and
   asserts the registered descriptors, results, drift toggle and sign-out behaviour, plus that no two
-  demos slug to the same namespace. For Wallet, against a controllable clock: that quoting moves no
+  demos slug to the same namespace. For Crypto Desk, against a controllable clock: that quoting moves no
   money, a replayed `idempotencyKey` adds no second trade, and an expired or over-cap trade is refused.
 
 Not covered: the Chrome-only surfaces (content-script bridge, service-worker messaging, panel
@@ -323,7 +333,7 @@ workflow on a `chrome.alarms` interval becomes a watcher for free — each tick 
 the gate decides whether anything happens. The real design work is not the timer but the approval:
 today a write asks the person at the keyboard, and at 3 AM nobody is there. The answer is to approve
 once, in advance, with limits stored beside the schedule — *at most $1,000, once, before 30 September,
-using only `kestrel_wallet.execute_quote`* — validated in `startRun` rather than at a prompt. It also
+using only `crypto_desk.execute_quote`* — validated in `startRun` rather than at a prompt. It also
 needs run state that survives the service worker being evicted, which today it does not.
 
 **Workflows calling workflows.** Names are already unique and already resolve, so a step could refer

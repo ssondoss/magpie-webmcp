@@ -32,13 +32,13 @@ validates against that instead:
 | max spend per fire | $1,000 | a plan that quotes for far more |
 | max fires | 1 | it disarms itself after firing |
 | expiry | 2026-09-30 | a forgotten job running forever |
-| allowed tools | `wallet.execute_quote` only | any other write sneaking in |
+| allowed tools | `crypto_desk.execute_quote` only | any other write sneaking in |
 
 Shown to the user as one sentence before they arm it — *"this may spend up to $1,000, once, before
 30 September"* — with a notification on every fire and on self-disarm, and a `blocked` park rather
 than adaptation if a plan drifts outside the limits.
 
-The Wallet demo's own $1,500 ceiling is the second, independent limit: one in the extension, one at
+The Crypto Desk demo's own $1,500 ceiling is the second, independent limit: one in the extension, one at
 the resource, so neither is the single point of failure.
 
 ### Testing focus

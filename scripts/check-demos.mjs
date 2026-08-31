@@ -233,7 +233,7 @@ function structured(result) {
   );
 }
 
-// --- Wallet app --------------------------------------------------------------
+// --- Crypto Desk app ---------------------------------------------------------
 
 {
   // A controllable clock, so quote expiry is tested rather than assumed.
@@ -247,13 +247,13 @@ function structured(result) {
     }
   }
 
-  const { tools, elements } = await run('demo/wallet/app.js', { DateImpl: FixedDate });
+  const { tools, elements } = await run('demo/crypto/app.js', { DateImpl: FixedDate });
   assert.deepEqual([...tools.keys()], ['get_balances', 'get_quote', 'execute_quote', 'list_trades']);
   for (const name of ['get_balances', 'get_quote', 'execute_quote', 'list_trades']) {
     assertDescriptor(tools.get(name), name);
   }
 
-  // The deliberate hole: nothing here can move money off the wallet, so asking to
+  // The deliberate hole: nothing here can move money off the desk, so asking to
   // withdraw must surface as a missing capability rather than an invented one.
   for (const forbidden of ['withdraw', 'add_withdrawal_address', 'create_api_key', 'transfer']) {
     assert.ok(!tools.has(forbidden), `${forbidden} must not be exposed to agents`);
@@ -270,7 +270,7 @@ function structured(result) {
   assert.deepEqual([...tools.get('execute_quote').inputSchema.required], ['quoteId', 'idempotencyKey']);
 
   const opening = structured(tools.get('get_balances').execute({}));
-  assert.ok(opening.available.USD >= 1000, 'seed wallet must satisfy the demo balance condition');
+  assert.ok(opening.available.USD >= 1000, 'seed account must satisfy the demo balance condition');
   assert.equal(opening.quoteCurrency, 'USD');
 
   const quote = structured(tools.get('get_quote').execute({ fromAsset: 'USD', toAsset: 'BTC', amount: 1000 }));
@@ -301,7 +301,7 @@ function structured(result) {
   assert.equal(structured(tools.get('list_trades').execute({})).count, 1, 'a replay must not add a trade');
   assert.equal(structured(tools.get('get_balances').execute({})).available.USD, after.available.USD);
 
-  // The wallet's own ceiling, enforced here rather than trusted to the planner.
+  // The desk's own ceiling, enforced here rather than trusted to the planner.
   const tooBig = structured(tools.get('get_quote').execute({ fromAsset: 'USD', toAsset: 'BTC', amount: 2000 }));
   assert.throws(
     () => tools.get('execute_quote').execute({ quoteId: tooBig.quoteId, idempotencyKey: 'over-cap' }),
@@ -324,7 +324,7 @@ function structured(result) {
   elements.get('resetBtn').click();
   assert.equal(structured(tools.get('list_trades').execute({})).count, 0, 'reset must clear trades');
   console.log(
-    `[wallet] bought ${trade.received} BTC for $${trade.spent}; replay, over-cap and expiry all refused`,
+    `[crypto] bought ${trade.received} BTC for $${trade.spent}; replay, over-cap and expiry all refused`,
   );
 }
 
@@ -341,7 +341,7 @@ function structured(result) {
   const slug = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   const seen = new Map();
 
-  for (const app of ['orders', 'support', 'metals', 'wallet']) {
+  for (const app of ['orders', 'support', 'metals', 'crypto']) {
     const html = await readFile(`demo/${app}/index.html`, 'utf8');
     const name = html.match(/<meta name="webmcp-provider" content="([^"]+)"/)?.[1];
     assert.ok(name, `demo/${app} must declare a webmcp-provider meta tag`);

@@ -16,7 +16,12 @@ import { request } from '../api';
 
 interface Props {
   settings: PublicSettings;
-  onSave(patch: { autoOpenSites?: boolean; slackWebhookUrl?: string; emailClient?: 'gmail' | 'mailto' }): void;
+  onSave(patch: {
+    autoOpenSites?: boolean;
+    slackWebhookUrl?: string;
+    emailClient?: 'gmail' | 'mailto';
+    calendarClient?: 'google' | 'ics';
+  }): void;
 }
 
 export function Settings({ settings, onSave }: Props) {
@@ -123,6 +128,26 @@ export function Settings({ settings, onSave }: Props) {
       </label>
       <p className="muted small">
         Compose email opens a pre-filled draft — you press send. It never sends mail by itself.
+      </p>
+
+      <label className="field">
+        <span>Calendar events open as</span>
+        <div className="examples">
+          {(['google', 'ics'] as const).map((client) => (
+            <button
+              key={client}
+              type="button"
+              className={`chip${settings.calendarClient === client ? ' active' : ''}`}
+              onClick={() => onSave({ calendarClient: client })}
+            >
+              {client === 'google' ? 'Google Calendar' : '.ics download'}
+            </button>
+          ))}
+        </div>
+      </label>
+      <p className="muted small">
+        Same idea: a pre-filled event you confirm. Choose <code>.ics</code> for Outlook, Apple Calendar, or any
+        client that imports a file.
       </p>
 
       <div className="actions">

@@ -1,9 +1,9 @@
-/* Kestrel Wallet — holds balances and buys crypto. The write is real money, so it is staged. */
+/* Crypto Desk — holds balances and buys crypto. The write is real money, so it is staged. */
 
 /** WebMCP moved to document.modelContext; navigator.modelContext is the legacy alias. */
 const modelContext = document.modelContext ?? navigator.modelContext;
 
-const STORAGE_KEY = 'wallet-demo';
+const STORAGE_KEY = 'crypto-desk-demo';
 
 /** Free USD sits above $1,000 so the balance leg of the demo condition passes. */
 const SEED_BALANCES = { USD: 1240.0, BTC: 0.0132, ETH: 0.41 };
@@ -13,7 +13,7 @@ const FEE_RATE = 0.0035;
 const QUOTE_TTL_SECONDS = 90;
 
 /**
- * The wallet's own ceiling on agent-driven purchases, enforced here rather than
+ * The desk's own ceiling on agent-driven purchases, enforced here rather than
  * asked of the model. Whatever a plan says, this is the number that decides —
  * which is why $1,000 goes through and $2,000 does not.
  */
@@ -81,7 +81,7 @@ function nextId(prefix, count) {
 const getBalancesTool = {
   name: 'get_balances',
   description:
-    'Get this wallet\'s balances. Returns { balances: [{ asset, free, locked, valueUsd }], available, quoteCurrency, totalValueUsd }. "available" is a map of asset to free amount, so the free cash is available.USD and the bitcoin held is available.BTC. Assets are USD, BTC and ETH.',
+    'Get this account\'s balances. Returns { balances: [{ asset, free, locked, valueUsd }], available, quoteCurrency, totalValueUsd }. "available" is a map of asset to free amount, so the free cash is available.USD and the bitcoin held is available.BTC. Assets are USD, BTC and ETH.',
   inputSchema: { type: 'object', properties: {}, required: [] },
   annotations: { title: 'Get balances', readOnlyHint: true },
   execute() {
@@ -163,7 +163,7 @@ const getQuoteTool = {
 const executeQuoteTool = {
   name: 'execute_quote',
   description:
-    'Execute a quote from get_quote. THIS SPENDS REAL MONEY. Requires the quoteId and an idempotencyKey; calling it again with the same idempotencyKey returns the original trade instead of trading twice. Rejects expired quotes, insufficient balances, and any single trade above this wallet\'s limit of $' +
+    'Execute a quote from get_quote. THIS SPENDS REAL MONEY. Requires the quoteId and an idempotencyKey; calling it again with the same idempotencyKey returns the original trade instead of trading twice. Rejects expired quotes, insufficient balances, and any single trade above this desk\'s limit of $' +
     MAX_TRADE_USD +
     '. Returns { tradeId, spent, received, fromAsset, toAsset, filledPrice, feeUsd, executedAt, replay, balancesAfter }.',
   inputSchema: {
@@ -202,7 +202,7 @@ const executeQuoteTool = {
     if (quote.notionalUsd > MAX_TRADE_USD) {
       log('execute_quote', { quoteId }, `refused — $${quote.notionalUsd} over the $${MAX_TRADE_USD} limit`);
       throw new Error(
-        `This wallet refuses any single trade above $${MAX_TRADE_USD}; that quote is $${quote.notionalUsd}. Quote a smaller amount.`,
+        `This desk refuses any single trade above $${MAX_TRADE_USD}; that quote is $${quote.notionalUsd}. Quote a smaller amount.`,
       );
     }
     if (free(quote.fromAsset) < quote.amount) {
@@ -244,7 +244,7 @@ const executeQuoteTool = {
 const listTradesTool = {
   name: 'list_trades',
   description:
-    'List trades made in this wallet, newest first. Returns { trades: [{ tradeId, fromAsset, toAsset, spent, received, filledPrice, feeUsd, executedAt }], count }.',
+    'List trades made at this desk, newest first. Returns { trades: [{ tradeId, fromAsset, toAsset, spent, received, filledPrice, feeUsd, executedAt }], count }.',
   inputSchema: {
     type: 'object',
     properties: { limit: { type: 'number', description: 'Maximum number of trades to return' } },
@@ -272,7 +272,7 @@ function renderBalances() {
       </tr>`,
     )
     .join('');
-  document.getElementById('capState').textContent = `This wallet refuses agent trades above $${MAX_TRADE_USD}.`;
+  document.getElementById('capState').textContent = `This desk refuses agent trades above $${MAX_TRADE_USD}.`;
 }
 
 function renderTrades() {
@@ -315,7 +315,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   state.keys = {};
   save();
   render();
-  log('(page)', {}, 'wallet reset to seed balances');
+  log('(page)', {}, 'account reset to seed balances');
 });
 
 modelContext.registerTool(getBalancesTool);

@@ -926,6 +926,23 @@ button.link {
   overflow: hidden;
 }
 
+/* Only set when the text is measured as overflowing, so the affordance never
+   promises more than there is. */
+.cap p.clampable {
+  cursor: pointer;
+}
+
+.cap p.clampable:hover,
+.cap p.clampable:focus-visible {
+  color: var(--text);
+}
+
+/* `display: block` is what lifts the clamp — -webkit-line-clamp only applies to
+   a -webkit-box. */
+.cap p.open {
+  display: block;
+}
+
 /* ---- forms ---- */
 
 textarea {

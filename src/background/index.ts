@@ -82,6 +82,7 @@ async function buildState(): Promise<PanelState> {
       hasSlackWebhook: Boolean(settings.slackWebhookUrl),
       slackWebhookHost: webhookHost(settings.slackWebhookUrl),
       emailClient: settings.emailClient,
+      calendarClient: settings.calendarClient,
     },
   };
 }

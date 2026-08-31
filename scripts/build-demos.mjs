@@ -7,7 +7,7 @@ import { cp, mkdir, rm } from 'node:fs/promises';
  * is that Orders and Support are different sites, and same-origin hosting would
  * collapse them into one provider in the capability registry.
  */
-const APPS = ['orders', 'support', 'metals', 'wallet'];
+const APPS = ['orders', 'support', 'metals', 'crypto'];
 const outdir = 'demo-dist';
 
 await rm(outdir, { recursive: true, force: true });

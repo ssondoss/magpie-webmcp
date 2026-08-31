@@ -178,6 +178,8 @@ export interface Settings {
   slackWebhookUrl: string;
   /** Where compose_email opens a draft. */
   emailClient: 'gmail' | 'mailto';
+  /** How create_calendar_event hands over the event: a Google form, or an .ics file. */
+  calendarClient: 'google' | 'ics';
 }
 
 export interface PublicSettings {
@@ -186,6 +188,7 @@ export interface PublicSettings {
   /** Host of the stored webhook, so a mis-pasted URL is visible. */
   slackWebhookHost: string;
   emailClient: 'gmail' | 'mailto';
+  calendarClient: 'google' | 'ics';
 }
 
 export interface PanelState {

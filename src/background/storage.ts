@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoOpenSites: true,
   slackWebhookUrl: '',
   emailClient: 'gmail',
+  calendarClient: 'google',
 };
 
 async function read<T>(key: string, fallback: T): Promise<T> {
@@ -41,6 +42,9 @@ export function sanitizeSettingsPatch(patch: Partial<Settings>): Partial<Setting
   if (typeof patch.autoOpenSites === 'boolean') clean.autoOpenSites = patch.autoOpenSites;
   if (patch.emailClient === 'gmail' || patch.emailClient === 'mailto') {
     clean.emailClient = patch.emailClient;
+  }
+  if (patch.calendarClient === 'google' || patch.calendarClient === 'ics') {
+    clean.calendarClient = patch.calendarClient;
   }
 
   // Empty is meaningful here — it is how the webhook is removed.

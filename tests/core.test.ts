@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { runResult, startRun, unresolvedTemplates } from '../src/background/engine';
-import { buildCsv, globalCapabilities, testWebhook } from '../src/background/global-tools';
+import {
+  buildCsv,
+  buildIcs,
+  eventWindow,
+  globalCapabilities,
+  testWebhook,
+  whatsappNumber,
+} from '../src/background/global-tools';
 import { isTrustedPageOrigin } from '../src/shared/protocol';
 import { applyTransform, evaluateCondition } from '../src/background/transform';
 import { candidateProviderKey, inferRisk, schemaHash } from '../src/shared/capability';
@@ -32,6 +39,7 @@ const NO_WEBHOOK: Settings = {
   autoOpenSites: true,
   slackWebhookUrl: '',
   emailClient: 'gmail',
+  calendarClient: 'google',
 };
 
 // --- engine harness ----------------------------------------------------------
@@ -310,6 +318,8 @@ test('global tools are registered as extension capabilities', () => {
     'global.download_file',
     'global.copy_to_clipboard',
     'global.compose_email',
+    'global.create_calendar_event',
+    'global.send_whatsapp_message',
     'global.send_slack_message',
     'global.notify',
     'global.open_url',
@@ -318,7 +328,98 @@ test('global tools are registered as extension capabilities', () => {
 
   // Only tools whose side effects stay on this machine skip the approval gate.
   const outward = capabilities.filter((item) => !item.local).map((item) => item.name);
-  assert.deepEqual(outward, ['compose_email', 'send_slack_message']);
+  assert.deepEqual(outward, [
+    'compose_email',
+    'create_calendar_event',
+    'send_whatsapp_message',
+    'send_slack_message',
+  ]);
+
+  // The two drafting tools need no setup, so they must never park on AUTH_REQUIRED
+  // the way send_slack_message does without a webhook.
+  const whatsapp = capabilities.find((item) => item.name === 'send_whatsapp_message');
+  assert.equal(whatsapp?.status, 'AVAILABLE');
+  assert.equal(capabilities.find((item) => item.name === 'send_slack_message')?.status, 'AUTH_REQUIRED');
+});
+
+test('eventWindow resolves a window from an end or a duration', () => {
+  const fromDuration = eventWindow({ start: '2026-09-01T09:00:00Z', durationMinutes: 45 });
+  assert.equal(fromDuration.start.toISOString(), '2026-09-01T09:00:00.000Z');
+  assert.equal(fromDuration.end.toISOString(), '2026-09-01T09:45:00.000Z');
+
+  // No duration given: half an hour is the useful default for a follow-up call.
+  assert.equal(
+    eventWindow({ start: '2026-09-01T09:00:00Z' }).end.toISOString(),
+    '2026-09-01T09:30:00.000Z',
+  );
+
+  const explicit = eventWindow({ start: '2026-09-01T09:00:00Z', end: '2026-09-01T10:15:00Z' });
+  assert.equal(explicit.end.toISOString(), '2026-09-01T10:15:00.000Z');
+});
+
+test('eventWindow refuses a date with no time rather than booking 3 AM', () => {
+  // An agent that drops the time would otherwise schedule midnight and look
+  // deliberate about it.
+  assert.throws(() => eventWindow({ start: '2026-09-01' }), /needs a time of day/);
+
+  assert.throws(() => eventWindow({ start: '' }), /needs a start time/);
+  assert.throws(() => eventWindow({ start: 'next tuesday' }), /could not read the start time/);
+  assert.throws(
+    () => eventWindow({ start: '2026-09-01T09:00:00Z', end: '2026-09-01T08:00:00Z' }),
+    /at or before the start/,
+  );
+  assert.throws(
+    () => eventWindow({ start: '2026-09-01T09:00:00Z', durationMinutes: 0 }),
+    /positive durationMinutes/,
+  );
+});
+
+test('buildIcs emits an importable VEVENT', () => {
+  const ics = buildIcs({
+    title: 'Follow-up: order SO-1',
+    start: new Date('2026-09-01T09:00:00Z'),
+    end: new Date('2026-09-01T09:30:00Z'),
+    description: 'Delayed 22 days',
+    location: 'https://example.com/call',
+    attendees: ['ops@acme.test'],
+  });
+
+  assert.match(ics, /^BEGIN:VCALENDAR\r\n/);
+  assert.match(ics, /\r\nEND:VCALENDAR\r\n$/);
+  assert.ok(ics.includes('DTSTART:20260901T090000Z'));
+  assert.ok(ics.includes('DTEND:20260901T093000Z'));
+  assert.ok(ics.includes('ATTENDEE;RSVP=TRUE:mailto:ops@acme.test'));
+
+  // Commas are iCalendar delimiters, so an unescaped one splits the field and the
+  // event imports with a truncated title.
+  const comma = buildIcs({
+    title: 'Review Q3, then plan Q4',
+    start: new Date('2026-09-01T09:00:00Z'),
+    end: new Date('2026-09-01T09:30:00Z'),
+    attendees: [],
+  });
+  assert.ok(comma.includes('SUMMARY:Review Q3\\, then plan Q4'));
+
+  // Every line must be CRLF-terminated; a bare LF is rejected by some clients.
+  for (const line of ics.split('\r\n').filter(Boolean)) {
+    assert.ok(!line.includes('\n'), `line contains a bare LF: ${line}`);
+  }
+});
+
+test('whatsappNumber accepts human formatting and rejects unreachable numbers', () => {
+  // However a number arrives on a page, wa.me needs bare digits.
+  assert.equal(whatsappNumber('+971 50 123 4567'), '971501234567');
+  assert.equal(whatsappNumber('+1 (415) 555-0132'), '14155550132');
+  assert.equal(whatsappNumber('971501234567'), '971501234567');
+
+  // A trunk prefix would silently resolve to the wrong country, so it must throw
+  // rather than reach a stranger.
+  assert.throws(() => whatsappNumber('050 123 4567'), /country code/);
+
+  assert.throws(() => whatsappNumber('12345'), /8 to 15/);
+  assert.throws(() => whatsappNumber('1234567890123456'), /8 to 15/);
+  assert.throws(() => whatsappNumber(''), /needs a phone number/);
+  assert.throws(() => whatsappNumber('not a number'), /needs a phone number/);
 });
 
 test('a webhook URL pasted with the page button label attached is cleaned up', () => {
@@ -543,14 +644,14 @@ test('a derive reason step stores whatever the model produced', async () => {
 
 // --- gate steps --------------------------------------------------------------
 
-/** Two tool steps standing in for a price feed and a wallet, then a purchase. */
+/** Two tool steps standing in for a price feed and an account balance, then a purchase. */
 function watchPlan(condition: Condition): WorkflowPlan {
   return planSchema.parse({
     name: 'Buy BTC when gold breaks $3,500',
     status: 'SUPPORTED',
     steps: [
       { id: 's1', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'spot' },
-      { id: 's2', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'wallet' },
+      { id: 's2', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'balances' },
       { id: 's3', type: 'gate', condition },
       { id: 's4', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'trade' },
     ],
@@ -561,7 +662,7 @@ function watchPlan(condition: Condition): WorkflowPlan {
 const GOLD_AND_CASH: Condition = {
   all: [
     { field: 'spot.quotes.0.price', operator: '>', value: 3500 },
-    { field: 'wallet.available.USD', operator: '>=', value: 1000 },
+    { field: 'balances.available.USD', operator: '>=', value: 1000 },
   ],
 };
 
@@ -596,7 +697,7 @@ test('a gate fails closed when the data it checks never arrived', async () => {
     name: 'Buy the dip',
     status: 'SUPPORTED',
     steps: [
-      { id: 's1', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'wallet' },
+      { id: 's1', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'balances' },
       { id: 's2', type: 'gate', condition: { field: 'spot.quotes.0.price', operator: '<', value: 3500 } },
       { id: 's3', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'trade' },
     ],
