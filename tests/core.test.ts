@@ -452,14 +452,21 @@ test('unresolvedTemplates finds only genuinely missing paths', () => {
 
 test('only exact trusted origins may drive the extension', () => {
   assert.ok(isTrustedPageOrigin('http://localhost:4173'));
-  assert.ok(isTrustedPageOrigin('https://magpie.vercel.app'));
+  assert.ok(isTrustedPageOrigin('https://magpie-webmcp.vercel.app'));
 
   // A prefix or suffix test would let an attacker register a matching hostname.
-  assert.ok(!isTrustedPageOrigin('https://magpie.vercel.app.evil.com'));
-  assert.ok(!isTrustedPageOrigin('https://evil.com/https://magpie.vercel.app'));
-  assert.ok(!isTrustedPageOrigin('https://magpie.vercel.app:8443'));
-  assert.ok(!isTrustedPageOrigin('http://magpie.vercel.app'), 'scheme is part of the origin');
-  assert.ok(!isTrustedPageOrigin('https://magpie.vercel.app/'), 'an origin carries no trailing slash');
+  assert.ok(!isTrustedPageOrigin('https://magpie-webmcp.vercel.app.evil.com'));
+  assert.ok(!isTrustedPageOrigin('https://evil.com/https://magpie-webmcp.vercel.app'));
+  assert.ok(!isTrustedPageOrigin('https://magpie-webmcp.vercel.app:8443'));
+  assert.ok(!isTrustedPageOrigin('http://magpie-webmcp.vercel.app'), 'scheme is part of the origin');
+  assert.ok(
+    !isTrustedPageOrigin('https://magpie-webmcp.vercel.app/'),
+    'an origin carries no trailing slash',
+  );
+
+  // Vercel gives every deployment its own hostname. Only the production alias is
+  // trusted, so a preview build cannot drive the extension.
+  assert.ok(!isTrustedPageOrigin('https://magpie-webmcp-git-main.vercel.app'));
 
   // Anything malformed or absent is untrusted.
   for (const value of ['', 'null', 'undefined', undefined]) {

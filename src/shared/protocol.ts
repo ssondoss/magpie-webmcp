@@ -23,7 +23,7 @@ export const EXTENSION_TO_PAGE = '__magpieFromExtension';
 
 export const TRUSTED_PAGE_ORIGINS = [
   'http://localhost:4173',
-  'https://magpie.vercel.app',
+  'https://magpie-webmcp.vercel.app',
 ];
 
 export function isTrustedPageOrigin(origin: string | undefined): boolean {

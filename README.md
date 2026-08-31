@@ -5,7 +5,7 @@ lets your agent use all of it together.**
 
 | | |
 |---|---|
-| 🔗 **Live site** | *(deploy first — see [DEPLOY.md](DEPLOY.md))* |
+| 🔗 **Live site** | <https://magpie-webmcp.vercel.app> |
 | 🎬 **Demo video** | *(add the YouTube link here)* |
 | 🧩 **Extension** | `magpie-extension.zip` from Releases, or `npm run release` |
 | 📄 **License** | [MIT](LICENSE) |
@@ -276,16 +276,20 @@ as candidates.
 
 Four static sites, each on its own origin, each exposing real WebMCP tools:
 
-| Site | Port | Namespace | Tools |
-|---|---|---|---|
-| **Northwind Orders** | 4321 | `northwind_orders` | `search_orders`, `find_orders`, `get_order`, `get_customer` |
-| **Helpdesk Support** | 4322 | `helpdesk_support` | `create_ticket`, `list_tickets` |
-| **Bullion Desk** | 4323 | `bullion_desk` | `get_spot`, `get_history`, `list_instruments` |
-| **Kestrel Wallet** | 4324 | `kestrel_wallet` | `get_balances`, `get_quote`, `execute_quote`, `list_trades` |
+| Site | Port | Deployed | Namespace | Tools |
+|---|---|---|---|---|
+| **Northwind Orders** | 4321 | <https://northwind-orders.vercel.app> | `northwind_orders` | `search_orders`, `find_orders`, `get_order`, `get_customer` |
+| **Helpdesk Support** | 4322 | <https://helpdesk-support.vercel.app> | `helpdesk_support` | `create_ticket`, `list_tickets` |
+| **Bullion Desk** | 4323 | <https://bullion-desk-eight.vercel.app> | `bullion_desk` | `get_spot`, `get_history`, `list_instruments` |
+| **Kestrel Wallet** | 4324 | <https://kestrel-wallet.vercel.app> | `kestrel_wallet` | `get_balances`, `get_quote`, `execute_quote`, `list_trades` |
 
 Separate ports mean separate origins, so composing across them is genuinely cross-site rather than
-staged. Support can be signed out, which is how `AUTH_REQUIRED` is demonstrated. Wallet enforces its
-own $1,500 per-trade ceiling, refuses replayed idempotency keys, and expires quotes — a second,
+staged. The namespaces come from each page's `<meta name="webmcp-provider">` rather than its hostname,
+so they are identical whether a demo is served on localhost or on Vercel — a workflow saved against
+one resolves against the other.
+
+Support can be signed out, which is how `AUTH_REQUIRED` is demonstrated. Wallet enforces its own
+$1,500 per-trade ceiling, refuses replayed idempotency keys, and expires quotes — a second,
 independent limit that holds regardless of what a workflow asks for.
 
 ## Tests
