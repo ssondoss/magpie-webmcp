@@ -5,7 +5,7 @@ lets your agent use all of it together.**
 
 | | |
 |---|---|
-| 🔗 **Live site** | <https://magpie-webmcp.vercel.app> |
+| 🔗 **Live site** | <https://magpie.help> |
 | 🎬 **Demo video** | *(add the YouTube link here)* |
 | 🧩 **Extension** | `magpie-extension.zip` from Releases, or `npm run release` |
 | 📄 **License** | [MIT](LICENSE) |

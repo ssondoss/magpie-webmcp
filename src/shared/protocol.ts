@@ -23,6 +23,14 @@ export const EXTENSION_TO_PAGE = '__magpieFromExtension';
 
 export const TRUSTED_PAGE_ORIGINS = [
   'http://localhost:4173',
+  // The custom domain is canonical. Both hosts are listed because `www` and the
+  // apex are *different origins*, and which one a visitor ends up on is decided by
+  // the host's redirect rather than by us — trusting only one silently breaks the
+  // other. The vercel.app subdomain stays because some networks filter newly
+  // created free subdomains and reset the connection, so it is not interchangeable
+  // with the custom domain for every visitor.
+  'https://magpie.help',
+  'https://www.magpie.help',
   'https://magpie-webmcp.vercel.app',
 ];
 

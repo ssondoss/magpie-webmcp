@@ -580,7 +580,15 @@ test('unresolvedTemplates finds only genuinely missing paths', () => {
 
 test('only exact trusted origins may drive the extension', () => {
   assert.ok(isTrustedPageOrigin('http://localhost:4173'));
+  // www and the apex are different origins, and the host decides which one a
+  // visitor lands on. Both are ours, so both are trusted.
+  assert.ok(isTrustedPageOrigin('https://magpie.help'));
+  assert.ok(isTrustedPageOrigin('https://www.magpie.help'));
   assert.ok(isTrustedPageOrigin('https://magpie-webmcp.vercel.app'));
+
+  // A subdomain we did not list is still a different site.
+  assert.ok(!isTrustedPageOrigin('https://orders.magpie.help'));
+  assert.ok(!isTrustedPageOrigin('https://magpie.help.evil.test'));
 
   // A prefix or suffix test would let an attacker register a matching hostname.
   assert.ok(!isTrustedPageOrigin('https://magpie-webmcp.vercel.app.evil.com'));
