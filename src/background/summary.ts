@@ -25,13 +25,21 @@ export interface ReasonOutcome {
 }
 
 /**
+ * Marks a handoff rather than a fault, so the engine can tell the two apart.
+ *
+ * Without a distinct type, a `reason` step behaving exactly as designed is
+ * indistinguishable from a tool that broke, and the run is reported as `failed`.
+ */
+export class ReasonDeclined extends Error {}
+
+/**
  * A `reason` step needs judgement, which is exactly the thing Magpie does not
- * do. Failing loudly beats inventing an answer, and the message is addressed to
+ * do. Stopping beats inventing an answer, and the message is addressed to
  * whoever is reading it: read the data and decide.
  */
 export function declineToReason(request: ReasonRequest): Promise<ReasonOutcome> {
   return Promise.reject(
-    new Error(
+    new ReasonDeclined(
       `"${request.instruction}" is a judgement Magpie does not make on its own. ` +
         'Read the data from the previous step and decide it yourself, then continue with the remaining steps.',
     ),
@@ -47,6 +55,19 @@ export function summarize(plan: WorkflowPlan, run: RunSnapshot, finalValue: unkn
   if (run.status === 'conditions_not_met') {
     const gate = run.steps.find((step) => step.type === 'gate' && step.status === 'skipped');
     return `"${plan.name}" checked its condition and did nothing further — ${gate?.preview ?? 'the condition was not met'}.`;
+  }
+
+  // A reason step handed the question back. The agent reading this can answer it
+  // and carry on, so the message is an instruction, not a post-mortem — and the
+  // data it needs is attached rather than described.
+  if (run.status === 'needs_judgement') {
+    const step = run.steps.find((item) => item.type === 'reason' && item.status === 'skipped');
+    const data = preview(finalValue, 8);
+    return (
+      `"${plan.name}" ran ${run.steps.filter((item) => item.status === 'ok').length} steps and stopped at a judgement ` +
+      `Magpie does not make on its own: ${step?.error ?? step?.label ?? 'a reason step'}` +
+      `${data === 'no value' ? '' : ` Data so far — ${data}`}`
+    );
   }
 
   const ok = run.steps.filter((step) => step.status === 'ok').length;

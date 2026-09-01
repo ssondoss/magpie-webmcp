@@ -14,6 +14,7 @@ import { isTrustedPageOrigin } from '../src/shared/protocol';
 import { applyTransform, evaluateCondition } from '../src/background/transform';
 import { candidateProviderKey, inferRisk, schemaHash } from '../src/shared/capability';
 import { tabMatchesOrigin } from '../src/background/resolver';
+import { ReasonDeclined } from '../src/background/summary';
 import { planSchema, type Condition, type TransformStep, type WorkflowPlan } from '../src/shared/schema';
 import type { Settings } from '../src/shared/types';
 import {
@@ -733,6 +734,61 @@ test('a gate fails closed when the data it checks never arrived', async () => {
   assert.equal(run.snapshot.status, 'conditions_not_met');
   assert.equal(stub.calls(), 1);
   assert.match(run.snapshot.steps[1].preview ?? '', /nothing produced spot/);
+});
+
+test('a declined reason step stops the run without failing it', async () => {
+  const plan = planSchema.parse({
+    name: 'Email the worst offender',
+    status: 'SUPPORTED',
+    steps: [
+      { id: 's1', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'rows' },
+      { id: 's2', type: 'reason', input: 'rows', mode: 'select', instruction: 'Pick the worst', output: 'worst' },
+      { id: 's3', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'sent' },
+    ],
+  }) as WorkflowPlan;
+
+  const run = await runPlanWithStubs(plan, {
+    tool: () => ({ orders: ORDERS, count: 4 }),
+    // What production actually injects: no model, so the question goes back.
+    reason: () => {
+      throw new ReasonDeclined('"Pick the worst" is a judgement Magpie does not make on its own.');
+    },
+  });
+
+  // A handoff is not a crash. This is the distinction the whole reason-step design
+  // rests on, so it is pinned rather than left to the status mapping.
+  assert.equal(run.snapshot.status, 'needs_judgement');
+  assert.notEqual(run.snapshot.status, 'failed');
+
+  assert.equal(run.snapshot.steps[0].status, 'ok');
+  assert.equal(run.snapshot.steps[1].status, 'skipped');
+  assert.match(run.snapshot.steps[1].preview ?? '', /4 rows ready to judge/);
+
+  // Steps below were never reached, and must not read as broken.
+  assert.equal(run.snapshot.steps[2].status, 'skipped');
+  assert.match(run.snapshot.steps[2].error ?? '', /Not reached/);
+});
+
+test('a reason implementation that genuinely breaks still fails the run', async () => {
+  const plan = planSchema.parse({
+    name: 'Email the worst offender',
+    status: 'SUPPORTED',
+    steps: [
+      { id: 's1', type: 'tool', tool: 'orders.search_orders', arguments: {}, output: 'rows' },
+      { id: 's2', type: 'reason', input: 'rows', mode: 'select', instruction: 'Pick the worst', output: 'worst' },
+    ],
+  }) as WorkflowPlan;
+
+  const run = await runPlanWithStubs(plan, {
+    tool: () => ({ orders: ORDERS, count: 4 }),
+    reason: () => {
+      throw new Error('the model backend is down');
+    },
+  });
+
+  assert.equal(run.snapshot.status, 'failed');
+  assert.equal(run.snapshot.steps[1].status, 'error');
+  assert.match(run.snapshot.steps[1].error ?? '', /model backend is down/);
 });
 
 test('describeShape summarises collections, objects and scalars', () => {

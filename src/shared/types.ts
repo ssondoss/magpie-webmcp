@@ -133,14 +133,22 @@ export interface RequirementStatus {
 export type StepStatus = 'pending' | 'running' | 'ok' | 'error' | 'skipped' | 'blocked';
 
 /**
- * `conditions_not_met` is a *successful* end: a gate step decided the rest of the
- * workflow should not happen. It is deliberately not `failed` — a watch job that
- * finds nothing to do must not look broken.
+ * Two of these are stops rather than failures, and both are deliberately not
+ * `failed`.
+ *
+ * `conditions_not_met` — a gate step decided the rest of the workflow should not
+ * happen. A watch job that finds nothing to do must not look broken.
+ *
+ * `needs_judgement` — a `reason` step reached the point where the transform DSL
+ * runs out and a model is required. Magpie has none by design and hands the
+ * question back with the data attached. That is the designed behaviour, so
+ * reporting it as a crash misrepresents the one decision most worth explaining.
  */
 export type RunStatus =
   | 'running'
   | 'completed'
   | 'conditions_not_met'
+  | 'needs_judgement'
   | 'blocked'
   | 'failed'
   | 'cancelled';

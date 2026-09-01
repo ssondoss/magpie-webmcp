@@ -31,7 +31,7 @@ import {
   evaluateCondition,
   explainCondition,
 } from './transform';
-import type { ReasonOutcome, ReasonRequest } from './summary';
+import { ReasonDeclined, type ReasonOutcome, type ReasonRequest } from './summary';
 
 /**
  * Executes a validated plan one step at a time.
@@ -222,8 +222,19 @@ async function execute(record: RunRecord, options: RunOptions): Promise<RunSnaps
         snapshot.preview = describeTransformResult(inputValue, value);
         snapshot.durationMs = Date.now() - startedAt;
       } else if (step.type === 'reason') {
-        await executeReasonStep(step, record, snapshot, options);
+        const outcome = await executeReasonStep(step, record, snapshot, options);
         snapshot.durationMs = Date.now() - startedAt;
+        if (outcome === 'needs_judgement') {
+          // Same shape as a gate stopping: the steps below did not fail, they were
+          // never reached, and the run is a stop rather than a failure.
+          for (const later of record.snapshots.slice(record.cursor + 1)) {
+            later.status = 'skipped';
+            later.error = 'Not reached — the judgement above has to be made first';
+          }
+          record.status = 'needs_judgement';
+          options.onUpdate(snapshotOf(record));
+          return snapshotOf(record);
+        }
       } else if (step.type === 'gate') {
         // The condition is checked against the run's variables, not one row, so a
         // gate can compare a price to a balance produced by two different sites.
@@ -288,17 +299,29 @@ async function executeReasonStep(
   record: RunRecord,
   snapshot: RunStepSnapshot,
   options: RunOptions,
-): Promise<void> {
+): Promise<'ok' | 'needs_judgement'> {
   const inputValue = getPath(record.context, variableName(step.input));
   if (inputValue === undefined) {
     throw new Error(`"${variableName(step.input)}" was never produced by an earlier step`);
   }
   const items = toArray(inputValue);
-  const outcome = await options.reason({
-    instruction: step.instruction,
-    items,
-    mode: step.mode,
-  });
+
+  let outcome: ReasonOutcome;
+  try {
+    outcome = await options.reason({
+      instruction: step.instruction,
+      items,
+      mode: step.mode,
+    });
+  } catch (error) {
+    // Only a declared handoff is treated as a stop. A `reason` implementation that
+    // genuinely broke still fails the run, so this cannot swallow a real fault.
+    if (!(error instanceof ReasonDeclined)) throw error;
+    snapshot.status = 'skipped';
+    snapshot.error = error.message;
+    snapshot.preview = `Handed back — ${items.length} ${items.length === 1 ? 'row' : 'rows'} ready to judge`;
+    return 'needs_judgement';
+  }
 
   if (step.mode === 'select') {
     const indices = new Set((outcome.keep ?? []).filter((index) => Number.isInteger(index)));
@@ -312,6 +335,7 @@ async function executeReasonStep(
 
   record.lastOutputVar = step.output;
   snapshot.status = 'ok';
+  return 'ok';
 }
 
 /** Variables a gate's condition reads that no step in this run produced. */
