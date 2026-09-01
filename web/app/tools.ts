@@ -229,7 +229,7 @@ function toStoredRun(
  * Steps are not split across engines: if anything needs another origin the whole
  * plan goes to the extension, whose registry is a superset of this site's.
  */
-async function execute(
+export async function executeSteps(
   steps: WorkflowStep[],
   name: string,
   finalOutput: string | undefined,
@@ -341,7 +341,7 @@ export const TOOLS: Record<string, WebTool> = {
     execute: async (args) => {
       const workflow = getWorkflow(String(args.workflowId));
       if (!workflow) throw new Error(`No workflow matching "${String(args.workflowId)}"`);
-      return toJson(await execute(workflow.steps, workflow.name, workflow.finalOutput, workflow.id));
+      return toJson(await executeSteps(workflow.steps, workflow.name, workflow.finalOutput, workflow.id));
     },
   },
 
@@ -366,7 +366,7 @@ export const TOOLS: Record<string, WebTool> = {
       await assertToolsExist(steps);
       const goal = typeof args.goal === 'string' && args.goal.trim() ? args.goal.trim() : 'Ad-hoc steps';
       const finalOutput = typeof args.finalOutput === 'string' ? args.finalOutput : undefined;
-      return toJson(await execute(steps, goal, finalOutput, newId('adhoc')));
+      return toJson(await executeSteps(steps, goal, finalOutput, newId('adhoc')));
     },
   },
 

@@ -77,7 +77,38 @@ function write(next: Snapshot): void {
   for (const listener of listeners) listener();
 }
 
+let watchingOtherTabs = false;
+
+/**
+ * localStorage is shared across tabs; this module's `cache` is not.
+ *
+ * That matters more here than it looks. An agent driving this page frequently does
+ * so in its own tab or webview, so a `create_workflow` call lands in a different
+ * JS context from the one the person is watching — and that tab's cache is only
+ * re-read from storage on a fresh load. Without this, a saved workflow appears to
+ * be lost until reload.
+ *
+ * The `storage` event fires only in the *other* tabs of an origin, never the one
+ * that wrote, which is exactly the set that needs telling. Registered on first
+ * subscribe rather than at module scope so importing the store never depends on a
+ * `window` existing.
+ */
+function watchOtherTabs(): void {
+  if (watchingOtherTabs) return;
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  watchingOtherTabs = true;
+  window.addEventListener('storage', (event: StorageEvent) => {
+    // A null key is another tab calling storage.clear(), which concerns us too.
+    if (event.key !== null && event.key !== KEY) return;
+    // Drop the cache rather than trusting event.newValue, so a malformed payload
+    // goes through the same validation as a normal read.
+    cache = null;
+    for (const listener of listeners) listener();
+  });
+}
+
 export function subscribe(listener: () => void): () => void {
+  watchOtherTabs();
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

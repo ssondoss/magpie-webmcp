@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ToolDescriptor } from '../src/shared/types';
-import { runWorkflow } from './app/engine';
 import { SEED } from './app/seed';
 import {
   clearRuns,
   deleteRun,
   deleteWorkflow,
   getSnapshot,
-  recordRun,
   renameWorkflow,
   seedIfEmpty,
   subscribe,
   type StoredRun,
   type StoredWorkflow,
 } from './app/store';
-import { TOOLS, forgetReachable, registerTools } from './app/tools';
+import { TOOLS, executeSteps, forgetReachable, registerTools } from './app/tools';
 import { WorkflowDiagram } from './WorkflowDiagram';
 import { Sites } from './Sites';
 import { detectExtension, listExtensionCapabilities, type ExtensionCapability } from './app/extension';
@@ -352,8 +350,16 @@ export function App() {
   const run = async (workflow: StoredWorkflow): Promise<void> => {
     setRunning(workflow.id);
     try {
-      recordRun(await runWorkflow(workflow, new Map(Object.entries(TOOLS))));
+      // Goes through the same entry point the agent uses, so a workflow that needs
+      // another origin is delegated to the extension instead of being run against
+      // this site's tools alone — which skipped every cross-site step and made the
+      // Run button useless for exactly the workflows worth saving. It records the
+      // run itself, and prompts before anything that writes.
+      await executeSteps(workflow.steps, workflow.name, workflow.finalOutput, workflow.id);
       setTab('runs');
+    } catch {
+      // The approval prompt throws when the person declines. Nothing ran and
+      // nothing was recorded, so staying where we are is the honest outcome.
     } finally {
       setRunning(null);
     }
