@@ -160,10 +160,23 @@ export async function resolveRequirement(
     };
   }
 
+  /**
+   * The dead end: the reference names a namespace nothing is registered under, so
+   * there is no origin to reopen and no tool to match.
+   *
+   * Naming what was looked for and what exists turns an unactionable message into a
+   * diagnosis — the same reason `assertToolsExist` lists the real tool names rather
+   * than only rejecting the invented one.
+   */
+  const namespace = requirement.tool.split('.')[0];
+  const namespaces = [...new Set(Object.values(knownSites).map((site) => site.providerKey))].sort();
   return {
     ...base,
     status: 'TOOL_MISSING',
-    detail: 'No known provider exposes this capability.',
+    detail:
+      namespaces.length > 0
+        ? `Nothing is registered under "${namespace}". Magpie currently knows: ${namespaces.join(', ')}. Open the site once so it is remembered, then recreate this step.`
+        : `Nothing is registered under "${namespace}", and no sites are remembered yet. Open the site once so Magpie can see its tools.`,
   };
 }
 
