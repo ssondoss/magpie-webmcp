@@ -167,20 +167,60 @@ export async function resolveRequirement(
   };
 }
 
+/**
+ * Whether a tab is on this origin, counting one that has not committed yet.
+ *
+ * `chrome.tabs.query({ url })` matches only the committed URL, so a tab part-way
+ * through a redirect — which is every load on a store that sends you to a locale
+ * path — reads as absent. We would then open a second tab, which starts the same
+ * redirect again, and a workflow of several steps piles them up. `pendingUrl`
+ * carries the destination during that window, so checking both closes the gap.
+ */
+export function tabMatchesOrigin(tab: { url?: string; pendingUrl?: string }, origin: string): boolean {
+  for (const candidate of [tab.url, tab.pendingUrl]) {
+    if (!candidate) continue;
+    try {
+      if (new URL(candidate).origin === origin) return true;
+    } catch {
+      /* about:blank and chrome:// URLs have no comparable origin */
+    }
+  }
+  return false;
+}
+
+export async function findTabForOrigin(origin: string): Promise<chrome.tabs.Tab | undefined> {
+  const tabs = await chrome.tabs.query({});
+  return tabs.find((tab) => tabMatchesOrigin(tab, origin));
+}
+
+/**
+ * In-flight opens, keyed by origin. Two steps resolving at the same moment would
+ * otherwise each miss the other's tab and create one.
+ */
+const opening = new Map<string, Promise<number | undefined>>();
+
 /** Opens (or focuses) the tab for a provider origin. */
-export async function openProvider(origin: string, focus = true): Promise<number | undefined> {
-  const knownSites = await getKnownSites();
-  const url = knownSites[origin]?.url ?? origin;
-  const existing = await chrome.tabs.query({ url: `${origin}/*` });
-  if (existing.length > 0 && typeof existing[0].id === 'number') {
+export function openProvider(origin: string, focus = true): Promise<number | undefined> {
+  const inFlight = opening.get(origin);
+  if (inFlight) return inFlight;
+  const task = openProviderOnce(origin, focus).finally(() => opening.delete(origin));
+  opening.set(origin, task);
+  return task;
+}
+
+async function openProviderOnce(origin: string, focus: boolean): Promise<number | undefined> {
+  const existing = await findTabForOrigin(origin);
+  if (existing && typeof existing.id === 'number') {
     if (focus) {
-      await chrome.tabs.update(existing[0].id, { active: true });
-      if (typeof existing[0].windowId === 'number') {
-        await chrome.windows.update(existing[0].windowId, { focused: true });
+      await chrome.tabs.update(existing.id, { active: true });
+      if (typeof existing.windowId === 'number') {
+        await chrome.windows.update(existing.windowId, { focused: true });
       }
     }
-    return existing[0].id;
+    return existing.id;
   }
+  const knownSites = await getKnownSites();
+  const url = knownSites[origin]?.url ?? origin;
   const tab = await chrome.tabs.create({ url, active: focus });
   return tab.id;
 }
@@ -213,7 +253,14 @@ export async function ensureCapability(
   }
 
   if (status.status === 'SITE_CLOSED' && requirement.origin && options.autoOpen) {
-    await openProvider(requirement.origin, true);
+    // A site reads as closed the moment it navigates, because a navigating tab has
+    // no tools until its bridge announces again. When the navigation was one the
+    // site's own tool started — half of a Shopify-style surface moves the browser
+    // rather than returning data — the tab is right there, mid-load. Opening
+    // another would add a tab and pull focus for every step of the run, so wait
+    // for the one that exists instead.
+    const present = await findTabForOrigin(requirement.origin);
+    if (!present) await openProvider(requirement.origin, true);
     await waitForSite(requirement.origin, requirement.name, options.timeoutMs ?? SITE_READY_TIMEOUT_MS);
     const refreshed = await buildCapabilities();
     const found = refreshed.find((item) => item.id === toolId);

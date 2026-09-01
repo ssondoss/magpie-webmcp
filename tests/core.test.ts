@@ -13,6 +13,7 @@ import {
 import { isTrustedPageOrigin } from '../src/shared/protocol';
 import { applyTransform, evaluateCondition } from '../src/background/transform';
 import { candidateProviderKey, inferRisk, schemaHash } from '../src/shared/capability';
+import { tabMatchesOrigin } from '../src/background/resolver';
 import { planSchema, type Condition, type TransformStep, type WorkflowPlan } from '../src/shared/schema';
 import type { Settings } from '../src/shared/types';
 import {
@@ -340,6 +341,31 @@ test('global tools are registered as extension capabilities', () => {
   const whatsapp = capabilities.find((item) => item.name === 'send_whatsapp_message');
   assert.equal(whatsapp?.status, 'AVAILABLE');
   assert.equal(capabilities.find((item) => item.name === 'send_slack_message')?.status, 'AUTH_REQUIRED');
+});
+
+test('a tab mid-redirect still counts as being on the origin', () => {
+  const origin = 'https://www.aloyoga.com';
+
+  // The committed case.
+  assert.ok(tabMatchesOrigin({ url: 'https://www.aloyoga.com/' }, origin));
+  // A locale redirect lands on a different path, same origin.
+  assert.ok(tabMatchesOrigin({ url: 'https://www.aloyoga.com/ar-jo/' }, origin));
+
+  // The case that caused duplicate tabs: nothing committed yet, destination known
+  // only from pendingUrl.
+  assert.ok(tabMatchesOrigin({ url: 'about:blank', pendingUrl: 'https://www.aloyoga.com/ar-jo/' }, origin));
+  assert.ok(tabMatchesOrigin({ pendingUrl: 'https://www.aloyoga.com/' }, origin));
+
+  assert.ok(!tabMatchesOrigin({ url: 'https://www.awaytravel.com/' }, origin));
+  // A host that merely contains the origin must not match.
+  assert.ok(!tabMatchesOrigin({ url: 'https://www.aloyoga.com.evil.test/' }, origin));
+  // www is part of the origin, so the bare host is a different site.
+  assert.ok(!tabMatchesOrigin({ url: 'https://aloyoga.com/' }, origin));
+
+  // Unparseable or absent URLs are not matches, and must not throw.
+  assert.ok(!tabMatchesOrigin({ url: 'about:blank' }, origin));
+  assert.ok(!tabMatchesOrigin({ url: 'chrome://newtab/' }, origin));
+  assert.ok(!tabMatchesOrigin({}, origin));
 });
 
 test('eventWindow resolves a window from an end or a duration', () => {
