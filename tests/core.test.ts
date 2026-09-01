@@ -15,6 +15,7 @@ import { applyTransform, evaluateCondition } from '../src/background/transform';
 import { candidateProviderKey, inferRisk, schemaHash } from '../src/shared/capability';
 import { tabMatchesOrigin } from '../src/background/resolver';
 import { ReasonDeclined } from '../src/background/summary';
+import { mergeToolUrls } from '../src/background/registry';
 import { planSchema, type Condition, type TransformStep, type WorkflowPlan } from '../src/shared/schema';
 import type { Settings } from '../src/shared/types';
 import {
@@ -342,6 +343,24 @@ test('global tools are registered as extension capabilities', () => {
   const whatsapp = capabilities.find((item) => item.name === 'send_whatsapp_message');
   assert.equal(whatsapp?.status, 'AVAILABLE');
   assert.equal(capabilities.find((item) => item.name === 'send_slack_message')?.status, 'AUTH_REQUIRED');
+});
+
+test('tool URLs accumulate across the apps an origin serves', () => {
+  const tool = (name: string) => ({ name, description: '', inputSchema: {} });
+  const demos = 'https://googlechromelabs.github.io/webmcp-tools/demos';
+
+  // One origin, two apps on different paths. Visiting the second must not erase
+  // where the first one lives — that is the whole point of remembering.
+  const afterOrders = mergeToolUrls(undefined, [tool('get_order_status')], `${demos}/order-tracking/`);
+  const afterPizza = mergeToolUrls(afterOrders, [tool('make_pizza')], `${demos}/pizza-maker/`);
+
+  assert.equal(afterPizza.get_order_status, `${demos}/order-tracking/`);
+  assert.equal(afterPizza.make_pizza, `${demos}/pizza-maker/`);
+
+  // A tool that moves is re-pointed rather than duplicated.
+  const moved = mergeToolUrls(afterPizza, [tool('get_order_status')], `${demos}/orders-v2/`);
+  assert.equal(moved.get_order_status, `${demos}/orders-v2/`);
+  assert.equal(Object.keys(moved).length, 2);
 });
 
 test('a tab mid-redirect still counts as being on the origin', () => {

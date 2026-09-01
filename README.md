@@ -304,9 +304,9 @@ independent limit that holds regardless of what a workflow asks for.
 
 ## Tests
 
-`npm test` runs three suites — **54 tests**, no browser required:
+`npm test` runs three suites — **55 tests**, no browser required:
 
-- **Extension core** (35 tests, `tests/core.test.ts`) — reference resolution, every transform
+- **Extension core** (36 tests, `tests/core.test.ts`) — reference resolution, every transform
   operation, the Zod step contract, CSV quoting, risk inference, provider namespacing, schema-hash
   stability, result previews, and the trusted-origin check. The engine runs end to end against a
   `chrome.*` stub, including proof that a gate stops the steps below it, fails closed when its data

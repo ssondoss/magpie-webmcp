@@ -74,6 +74,17 @@ export interface KnownSite {
   url: string;
   tools: ToolDescriptor[];
   lastSeenAt: number;
+  /**
+   * Tool name → the URL last seen exposing it.
+   *
+   * Identity stays the origin, which is the web's actual trust boundary and the
+   * only thing stable enough to resolve a saved workflow months later. This is
+   * navigation metadata, not a second identity: some origins host several apps on
+   * different paths, so "the site is open" does not guarantee "this tool is here".
+   * Without it, such a tool is unrecoverable — the site is not closed, so nothing
+   * reopens it, and the run just stops.
+   */
+  toolUrls?: Record<string, string>;
 }
 
 export interface PageContext {

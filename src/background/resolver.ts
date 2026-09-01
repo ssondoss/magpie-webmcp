@@ -270,6 +270,32 @@ export async function ensureCapability(
     }
   }
 
+  /**
+   * The site is open, but this tool is not on the page it currently shows.
+   *
+   * Some origins host several apps on different paths, so "open" does not imply
+   * "here". Nothing reopens the site — it was never closed — so without this the
+   * run simply stops. The remembered URL is a hint, not an identity: if it is
+   * stale, the navigation costs one page load and we fail exactly as before.
+   */
+  if (status.status === 'TOOL_MISSING' && requirement.origin && options.autoOpen) {
+    const knownSites = await getKnownSites();
+    const rememberedUrl = knownSites[requirement.origin]?.toolUrls?.[requirement.name];
+    const tab = await findTabForOrigin(requirement.origin);
+
+    // Re-navigating a tab that is already there would loop without changing anything.
+    if (rememberedUrl && typeof tab?.id === 'number' && tab.url !== rememberedUrl) {
+      await chrome.tabs.update(tab.id, { url: rememberedUrl });
+      await waitForSite(requirement.origin, requirement.name, options.timeoutMs ?? SITE_READY_TIMEOUT_MS);
+      const refreshed = await buildCapabilities();
+      const found = refreshed.find((item) => item.id === toolId);
+      status = await resolveRequirement(requirement, refreshed);
+      if (status.status === 'AVAILABLE' || status.status === 'TOOL_CHANGED') {
+        return { ok: true, capability: found, requirement: status };
+      }
+    }
+  }
+
   return { ok: false, requirement: status };
 }
 

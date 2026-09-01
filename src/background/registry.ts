@@ -148,6 +148,9 @@ export async function recordAnnouncement(tabId: number, announcement: Announceme
   await persistLive();
 
   if (tools.length > 0) {
+    const previous = (await getKnownSites())[announcement.origin];
+    const toolUrls = mergeToolUrls(previous?.toolUrls, tools, announcement.url);
+
     const remembered: KnownSite = {
       origin: announcement.origin,
       provider,
@@ -156,6 +159,7 @@ export async function recordAnnouncement(tabId: number, announcement: Announceme
       url: announcement.url,
       tools,
       lastSeenAt: Date.now(),
+      toolUrls,
     };
     await putKnownSite(remembered);
   }
@@ -235,6 +239,23 @@ export function liveSiteForOrigin(origin: string, preferTabId?: number): LiveSit
   const withTools = matches.filter((site) => site.tools.length > 0);
   const pool = withTools.length > 0 ? withTools : matches;
   return pool.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+}
+
+/**
+ * Records where each tool was last seen, merging rather than replacing.
+ *
+ * An origin that serves several apps on different paths announces a different tool
+ * set from each one. Replacing would forget where the others live the moment you
+ * navigate away, which is precisely when the memory is needed.
+ */
+export function mergeToolUrls(
+  previous: Record<string, string> | undefined,
+  tools: ToolDescriptor[],
+  url: string,
+): Record<string, string> {
+  const merged = { ...previous };
+  for (const tool of tools) merged[tool.name] = url;
+  return merged;
 }
 
 function toCapability(
