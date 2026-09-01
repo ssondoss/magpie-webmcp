@@ -15,7 +15,7 @@ import { applyTransform, evaluateCondition } from '../src/background/transform';
 import { candidateProviderKey, inferRisk, schemaHash } from '../src/shared/capability';
 import { tabMatchesOrigin } from '../src/background/resolver';
 import { ReasonDeclined } from '../src/background/summary';
-import { mergeToolUrls } from '../src/background/registry';
+import { ensureProviderKey, mergeToolUrls } from '../src/background/registry';
 import { planSchema, type Condition, type TransformStep, type WorkflowPlan } from '../src/shared/schema';
 import type { Settings } from '../src/shared/types';
 import {
@@ -343,6 +343,20 @@ test('global tools are registered as extension capabilities', () => {
   const whatsapp = capabilities.find((item) => item.name === 'send_whatsapp_message');
   assert.equal(whatsapp?.status, 'AVAILABLE');
   assert.equal(capabilities.find((item) => item.name === 'send_slack_message')?.status, 'AUTH_REQUIRED');
+});
+
+test('a provider namespace never changes once assigned', async () => {
+  const origin = 'https://demos.example.test';
+
+  // First seen with no declared provider name, so the key comes from the hostname.
+  const first = await ensureProviderKey(origin, '');
+  assert.equal(first, 'demos');
+
+  // A page on the same origin later declares a name. Adopting it would produce a
+  // tidier namespace and orphan every workflow already referencing `demos.*` —
+  // with no way back, since nothing maps a dead key to an origin.
+  assert.equal(await ensureProviderKey(origin, 'Example Demos'), first);
+  assert.equal(await ensureProviderKey(origin, 'Something Else Entirely'), first);
 });
 
 test('tool URLs accumulate across the apps an origin serves', () => {

@@ -76,13 +76,25 @@ async function persistLive(): Promise<void> {
   await writeSession(LIVE_SESSION_KEY, snapshot);
 }
 
-async function ensureProviderKey(origin: string, providerName: string): Promise<string> {
+/**
+ * The namespace is an *identity*, not a label.
+ *
+ * Saved workflows reference tools as `providerKey.toolName` and hold no other way
+ * back to the site, so re-deriving the key orphans every workflow that used the old
+ * one — and the reference cannot be repaired afterwards, because nothing maps a
+ * dead key to an origin. That surfaces as "No known provider exposes this
+ * capability" on a site that is sitting open in the next tab.
+ *
+ * This used to upgrade a hostname-derived key once a page declared a provider name.
+ * A tidier namespace is not worth breaking every reference already written against
+ * the old one. The human-readable provider name is derived separately and still
+ * improves; only the identity is frozen.
+ */
+export async function ensureProviderKey(origin: string, providerName: string): Promise<string> {
   const keys = await getProviderKeys();
   const existing = keys[origin];
   const hasName = !!providerName.trim();
-  // Keep the assigned namespace stable unless we can upgrade a hostname-derived
-  // key to the provider's real declared name.
-  if (existing && (existing.from === 'name' || !hasName)) return existing.key;
+  if (existing) return existing.key;
 
   const taken = new Set(
     Object.entries(keys)
