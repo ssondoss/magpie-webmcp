@@ -8,6 +8,7 @@ import {
   getSnapshot,
   renameWorkflow,
   seedIfEmpty,
+  storageError,
   subscribe,
   type StoredRun,
   type StoredWorkflow,
@@ -241,6 +242,9 @@ function RunCard({ run, onDelete, fresh }: { run: StoredRun; onDelete(): void; f
         {run.steps.map((step) => (
           <li key={step.id} className={tone(step.status)}>
             <span>{step.label}</span>
+            {/* Which capability, and therefore which site — a label alone cannot
+                answer "what did this actually use". */}
+            {step.tool ? <code className="step-tool">{step.tool}</code> : null}
             {step.preview || step.error ? (
               <p className={`small ${step.error ? 'error' : 'muted'}`}>{step.error ?? step.preview}</p>
             ) : null}
@@ -424,6 +428,18 @@ export function App() {
         can use them together — find something on one site, send it from another — without you switching tabs.
         Workflows and history stay in this browser.
       </p>
+
+      {/*
+        Storage failing is indistinguishable from working until you reload, so it
+        has to be said out loud. Read during render rather than held in state:
+        `write` notifies subscribers straight after setting it, so the next render
+        already has the current value.
+      */}
+      {storageError() ? (
+        <p className="error" role="alert">
+          {storageError()}
+        </p>
+      ) : null}
 
       <nav className="tabs">
         {(['workflows', 'runs', 'sites'] as Tab[]).map((name) => (

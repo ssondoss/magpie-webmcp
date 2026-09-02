@@ -54,6 +54,7 @@ export async function runWorkflow(
       label: stepLabel(step, tools),
       type: step.type,
       status: 'ok',
+      tool: step.type === 'tool' ? step.tool : undefined,
     };
 
     try {

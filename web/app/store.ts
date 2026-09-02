@@ -25,6 +25,14 @@ export interface StoredRunStep {
   status: 'ok' | 'error' | 'skipped';
   preview?: string;
   error?: string;
+  /**
+   * The namespaced capability this step invoked, e.g. `northwind_orders.search_orders`.
+   *
+   * A label alone ("Get order status") says what happened but not *where* — and
+   * "which site did this actually use" is the question the run history exists to
+   * answer. Absent on transform, reason and gate steps, which touch no site.
+   */
+  tool?: string;
 }
 
 export interface StoredRun {
@@ -67,12 +75,29 @@ function read(): Snapshot {
   return cache;
 }
 
+let persistenceError: string | null = null;
+
+/** Why writes are not reaching storage, or null while they are. */
+export function storageError(): string | null {
+  return persistenceError;
+}
+
 function write(next: Snapshot): void {
   cache = next;
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
-  } catch {
-    /* private mode or quota — the session still works, it just will not persist */
+    persistenceError = null;
+  } catch (error) {
+    /*
+     * Swallowing this made a real failure indistinguishable from success: the
+     * in-memory cache still updates, so a saved workflow appears immediately and
+     * is simply gone on the next load, with nothing anywhere saying why.
+     */
+    persistenceError =
+      error instanceof Error && error.name === 'QuotaExceededError'
+        ? 'This browser has run out of storage for this site, so workflows and runs are not being saved. Delete some runs and try again.'
+        : 'This browser is not letting the page save data, so workflows and runs will be lost on reload. Private browsing, or a site-data setting for this origin, is the usual cause.';
+    console.error(`[magpie] ${persistenceError}`, error);
   }
   for (const listener of listeners) listener();
 }

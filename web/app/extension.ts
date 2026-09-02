@@ -6,7 +6,7 @@ import {
   type PageApiReply,
   type PageApiRequest,
 } from '../../src/shared/protocol';
-import type { WorkflowPlan } from '../../src/shared/schema';
+import type { WorkflowPlan, WorkflowStep } from '../../src/shared/schema';
 import type { ResultShape } from '../../src/shared/util';
 
 /**
@@ -32,7 +32,21 @@ export interface ExtensionRun {
   run: {
     id: string;
     status: string;
-    steps: Array<{ id: string; label: string; status: string; preview?: string; error?: string }>;
+    durationMs?: number;
+    /**
+     * `type` and `tool` are set on every snapshot before execution begins, so a
+     * run can be recorded from this payload alone — the original plan is not
+     * needed, which is what lets a run nobody here initiated still be stored.
+     */
+    steps: Array<{
+      id: string;
+      label: string;
+      type?: WorkflowStep['type'];
+      tool?: string;
+      status: string;
+      preview?: string;
+      error?: string;
+    }>;
     /** Field names and sample rows, carried into the next turn's context. */
     resultShape?: ResultShape;
   };
@@ -43,17 +57,64 @@ const pending = new Map<string, (reply: PageApiReply) => void>();
 let counter = 0;
 let listening = false;
 
+/** Prompts of RUN frames seen on the bridge, keyed by request id. */
+const bridgeRuns = new Map<string, string>();
+
+type BridgeRunObserver = (run: ExtensionRun, prompt: string) => void;
+let observeBridgeRun: BridgeRunObserver | null = null;
+
+/**
+ * Registers a handler for a plan that ran on the bridge without going through
+ * this module — an agent posting to the page API itself rather than calling
+ * `run_steps`.
+ *
+ * The extension executes such a plan and returns a run id, but nothing writes it
+ * to the library, so real work disappears from the history. Recording it here
+ * makes persistence a property of the bridge rather than of how an agent happened
+ * to be asked, which matters because we do not control the prompt.
+ */
+export function onUnrecordedRun(callback: BridgeRunObserver): void {
+  observeBridgeRun = callback;
+}
+
 function listen(): void {
   if (listening) return;
   listening = true;
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window) return;
     const data = event.data as (PageApiReply & Record<string, unknown>) | null;
-    if (!data || data[EXTENSION_TO_PAGE] !== true) return;
-    const resolve = pending.get(data.requestId);
-    if (!resolve) return;
-    pending.delete(data.requestId);
-    resolve(data);
+    if (!data) return;
+
+    // `postMessage` dispatches to listeners on the same window, so outgoing frames
+    // arrive here too — including ones this module did not send. That is what makes
+    // a reply attributable later, whoever asked for it.
+    if (data[PAGE_TO_EXTENSION] === true) {
+      const request = (data as { request?: PageApiRequest }).request;
+      if (request?.kind === 'RUN') {
+        // Bounded, so a page posting in a loop cannot grow this without limit.
+        if (bridgeRuns.size > 50) bridgeRuns.clear();
+        bridgeRuns.set(String(data.requestId), String(request.prompt ?? ''));
+      }
+      return;
+    }
+
+    if (data[EXTENSION_TO_PAGE] !== true) return;
+
+    const requestId = String(data.requestId);
+    const prompt = bridgeRuns.get(requestId);
+    bridgeRuns.delete(requestId);
+
+    const resolve = pending.get(requestId);
+    if (resolve) {
+      pending.delete(requestId);
+      resolve(data);
+      return;
+    }
+
+    // Unclaimed: `executeSteps` is not going to record this one, so we do.
+    if (prompt !== undefined && data.ok && observeBridgeRun) {
+      observeBridgeRun(data.data as ExtensionRun, prompt);
+    }
   });
 }
 

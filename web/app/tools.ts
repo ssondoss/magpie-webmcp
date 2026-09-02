@@ -3,7 +3,12 @@ import type { JsonObject, JsonValue, ToolDescriptor } from '../../src/shared/typ
 import { isPlainObject, newId, toArray, toJson } from '../../src/shared/util';
 import { buildCsv } from '../../src/background/global-tools';
 import { runWorkflow, type WebTool } from './engine';
-import { listExtensionCapabilities, runWithExtension, type ExtensionCapability } from './extension';
+import {
+  listExtensionCapabilities,
+  onUnrecordedRun,
+  runWithExtension,
+  type ExtensionCapability,
+} from './extension';
 import {
   assertNameFree,
   clearRuns,
@@ -190,22 +195,28 @@ async function confirmWrites(steps: WorkflowStep[]): Promise<void> {
   if (!allowed) throw new Error(`Declined by the user — nothing ran. Would have: ${actions.join(', ')}.`);
 }
 
-/** Projects the extension's run snapshot onto the shape this site stores. */
+/**
+ * Projects the extension's run snapshot onto the shape this site stores.
+ *
+ * Everything comes from the payload, including each step's `type` and the
+ * capability it invoked — the engine sets those before execution starts. Not
+ * needing the original plan is what lets a run this site never initiated be
+ * recorded just as completely.
+ */
 function toStoredRun(
   run: Awaited<ReturnType<typeof runWithExtension>>,
-  steps: WorkflowStep[],
   name: string,
   workflowId: string,
   startedAt: number,
 ): StoredRun {
-  const types = new Map(steps.map((step) => [step.id, step.type]));
   const recorded: StoredRunStep[] = run.run.steps.map((step) => ({
     id: step.id,
     label: step.label,
-    type: types.get(step.id) ?? 'tool',
+    type: step.type ?? 'tool',
     status: step.status === 'ok' ? 'ok' : step.status === 'error' ? 'error' : 'skipped',
     preview: step.preview,
     error: step.error,
+    tool: step.tool,
   }));
   return {
     id: run.run.id,
@@ -266,7 +277,7 @@ export async function executeSteps(
   };
   const startedAt = Date.now();
   const run = await runWithExtension(plan, name, true);
-  return recordRun(toStoredRun(run, steps, name, workflowId, startedAt));
+  return recordRun(toStoredRun(run, name, workflowId, startedAt));
 }
 
 export const TOOLS: Record<string, WebTool> = {
@@ -554,6 +565,20 @@ function mcpResult(payload: JsonValue): JsonObject {
 }
 
 export function registerTools(): ToolDescriptor[] {
+  /*
+   * A plan posted straight to the extension's page API never passes through
+   * `executeSteps`, so nothing would record it — the extension runs the work, hands
+   * back a run id, and the history stays empty. An agent is free to drive Magpie
+   * that way and we do not control how it is asked to, so recording has to happen
+   * at the bridge rather than depend on the prompt.
+   */
+  onUnrecordedRun((run, prompt) => {
+    // The run reports its own duration; anchoring the start to that keeps an
+    // externally-driven run honest instead of dating it from when we noticed.
+    const startedAt = Date.now() - (run.run.durationMs ?? 0);
+    recordRun(toStoredRun(run, prompt.trim() || 'Ad-hoc steps', newId('adhoc'), startedAt));
+  });
+
   const context = (document as unknown as { modelContext?: Record<string, unknown> }).modelContext;
   const descriptors = Object.values(TOOLS).map((tool) => tool.descriptor);
 
