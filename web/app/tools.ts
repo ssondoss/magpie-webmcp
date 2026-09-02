@@ -303,7 +303,7 @@ export const TOOLS: Record<string, WebTool> = {
     descriptor: {
       name: 'list_workflows',
       description:
-        'List the saved workflows in this library. Returns { workflows: [{ id, name, summary, stepCount, requires }], count }.',
+        'List the saved workflows in this library. Returns { workflows: [{ id, name, summary, stepCount, requires }], count }. `requires` names the capabilities each one uses, so this is how you find a workflow that already does part of what you were asked for — call get_workflow on it and adapt its steps rather than composing from scratch.',
       inputSchema: object({}),
       annotations: { title: 'List workflows', readOnlyHint: true },
     },
@@ -326,7 +326,8 @@ export const TOOLS: Record<string, WebTool> = {
   get_workflow: {
     descriptor: {
       name: 'get_workflow',
-      description: 'Get one workflow in full, including every step. Accepts an id or an exact name.',
+      description:
+        'Get one workflow in full, including every step. Accepts an id or an exact name. Its steps are a better starting point than a schema: the arguments in them are ones this site actually accepted. Adapt rather than copy — values like a threshold or a date are specific to what that workflow was for, and rename any `output` that would collide with a step you are keeping.',
       inputSchema: object({ workflowId: { type: 'string', description: 'Workflow id or exact name' } }, [
         'workflowId',
       ]),
@@ -433,7 +434,8 @@ export const TOOLS: Record<string, WebTool> = {
   get_run: {
     descriptor: {
       name: 'get_run',
-      description: 'Get one run in full, including every step result.',
+      description:
+        'Get one run in full, including every step result and the capability it called. A step recorded as ok is proof that capability worked with those arguments, which makes a past run the most reliable source to copy a step from.',
       inputSchema: object({ runId: { type: 'string', description: 'Run id' } }, ['runId']),
       annotations: { title: 'Get run', readOnlyHint: true },
     },

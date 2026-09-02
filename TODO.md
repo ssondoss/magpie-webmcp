@@ -32,13 +32,13 @@ validates against that instead:
 | max spend per fire | $1,000 | a plan that quotes for far more |
 | max fires | 1 | it disarms itself after firing |
 | expiry | 2026-09-30 | a forgotten job running forever |
-| allowed tools | `crypto_desk.execute_quote` only | any other write sneaking in |
+| allowed tools | `helpdesk_support.create_ticket` only | any other write sneaking in |
 
 Shown to the user as one sentence before they arm it — *"this may spend up to $1,000, once, before
 30 September"* — with a notification on every fire and on self-disarm, and a `blocked` park rather
 than adaptation if a plan drifts outside the limits.
 
-The Crypto Desk demo's own $1,500 ceiling is the second, independent limit: one in the extension, one at
+A demo site's own limits are the second, independent check: one in the extension, one at
 the resource, so neither is the single point of failure.
 
 ### Testing focus
@@ -138,6 +138,83 @@ Nested runs work in the happy path and break at the edges. Cover:
 - inner workflow has a `missing` step → outer run reports it rather than silently skipping
 - recursion guard fires
 - inner failure surfaces with the inner step's message, not a generic one
+
+---
+
+## D. A manual workflow builder — reuse steps without an agent
+
+**Idea.** Compose a workflow by picking steps out of saved workflows and past runs, reordering them,
+and editing the values that have to change. No model in the loop.
+
+Today every route to a *new* workflow goes through an agent: `create_workflow` and `run_steps` are
+agent-facing tools, and the UI can only run what already exists. That is a dependency the design does
+not actually need — the step format is plain JSON, the engine takes an arbitrary step list, and the
+steps worth copying are already stored.
+
+```
+Steps I already have                    New workflow
+─────────────────────                   ────────────
+northwind_orders.search_orders   ──┐
+  (from "Delayed order tickets")     ├──▶  1. search_orders   {status: delayed}
+                                     │     2. filter          amount > 10000   ← edited
+transform: filter amount > 5000  ──┘     3. compose_email     ← picked from another workflow
+  (same workflow)
+
+global.compose_email             ─────┘
+  (from "Weekly summary", ran ok)
+```
+
+### Design sketch
+
+- **Source list.** `getWorkflows()` for saved steps and `getRuns()` for steps that actually ran —
+  the latter now carry `tool` per step, so they can be grouped by capability and by whether they
+  finished `ok`. Dedupe on `(tool, arguments)`.
+- **Canvas.** Reuse [`WorkflowDiagram.tsx`](web/WorkflowDiagram.tsx), which already draws a step list
+  with its provider and a different shape for writes. That is most of the rendering already done.
+- **Editing, in order of necessity:** `id` uniqueness, `output` renamed on collision, `arguments`
+  values, and `input` for transform steps.
+- **Arguments as raw JSON for v1.** Schema-driven form fields generated from the capability's
+  `inputSchema` are nicer and a lot more code; a textarea validated on blur is honest and cheap.
+- **Save through the existing path** — `parseSteps` → `assertToolsExist` → `saveWorkflow`, so a
+  hand-built workflow is validated exactly like an agent-built one and an invented tool is refused
+  the same way.
+
+### The actual new work — static wiring validation
+
+Every `input` and `{{template}}` reference is checked only **at run time** today
+([`engine.ts`](src/background/engine.ts) throws `"… was never produced by an earlier step"`, and
+`unresolvedTemplates()` runs inside the tool executor). An agent gets away with that because it
+composes the whole plan at once. A builder cannot: data flows forward, so dragging a step above the
+step that produces its input breaks it — silently, until someone presses Run.
+
+So extract `validateWiring(steps)` returning the offending references, call it on every edit and
+reorder, and also call it in `create_workflow`. An agent gets the same guarantee for free, which is
+worth more than the builder itself.
+
+### Known limitation — arguments stay literal
+
+Same freeze as section C: a copied step's values are fixed at save time. The builder makes them
+editable while building, not at run time. Parameterised workflows remain the separate, larger
+feature.
+
+Most of the work is UI; reusing the diagram is where the saving is. The validator is small but is
+the part that has to be right.
+
+### Testing focus
+
+The validator is the part with real logic, so most of the value is there:
+- a transform whose `input` no earlier step produces is rejected
+- a `{{template}}` naming an output produced *later* is rejected
+- a reorder that moves a step above its producer is rejected
+- duplicate `output` names are flagged
+- a hand-built workflow naming a capability that does not exist is refused by `assertToolsExist`
+- a hand-built cross-site workflow runs identically to the agent-built equivalent
+
+### Why it is worth building
+
+It answers "does any of this need an AI?" — the engine is deterministic and the agent is a
+convenience, not a requirement. It also makes the project usable by someone with no agent set up at
+all, which today it is not.
 
 ---
 
