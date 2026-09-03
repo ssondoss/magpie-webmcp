@@ -3,6 +3,7 @@ import type { ToolDescriptor } from '../src/shared/types';
 import type { ExtensionCapability } from './app/extension';
 import { forgetSite, openSite } from './app/extension';
 import { pairings } from './app/suggest';
+import { InstallExtension } from './InstallExtension';
 
 /** Whether the suggestions block is open, remembered between visits. */
 const IDEAS_KEY = 'magpie.ideas.open';
@@ -244,14 +245,7 @@ export function Sites({ own, extension, onChanged }: Props) {
       ) : null}
 
       {!extension ? (
-        <article className="card muted-card">
-          <h3>Only this site</h3>
-          <p className="muted">
-            Magpie can list capabilities from every site you have visited that exposes WebMCP — but that registry
-            lives in the extension, which is not connected. Install it and the sites you have seen will appear here
-            alongside this one.
-          </p>
-        </article>
+        <InstallExtension lead="Magpie can list capabilities from every site you have visited that exposes WebMCP — but that registry lives in the extension, which is not connected. Add it and the sites you have seen appear here alongside this one." />
       ) : null}
 
       {groups.map((group) => {

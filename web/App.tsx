@@ -16,6 +16,7 @@ import {
 import { TOOLS, executeSteps, forgetReachable, registerTools } from './app/tools';
 import { WorkflowDiagram } from './WorkflowDiagram';
 import { Sites } from './Sites';
+import { InstallExtension } from './InstallExtension';
 import { detectExtension, listExtensionCapabilities, type ExtensionCapability } from './app/extension';
 
 type Tab = 'workflows' | 'runs' | 'sites';
@@ -452,19 +453,14 @@ export function App() {
 
       <main>
         {tab === 'workflows' && !extension ? (
-          <article className="card muted-card">
-            <h3>Running standalone</h3>
-            {probing ? (
+          probing ? (
+            <article className="card muted-card">
+              <h3>Running standalone</h3>
               <p className="muted">Looking for the Magpie extension…</p>
-            ) : (
-              <p className="muted">
-                The Magpie extension is not connected, so only this site's own capabilities are reachable — a page
-                cannot call tools on another origin, whatever is driving it. Everything here still works, and your
-                agent can still list, compose, run and inspect through <code>document.modelContext</code>. Install the
-                extension to add every WebMCP site you have visited.
-              </p>
-            )}
-          </article>
+            </article>
+          ) : (
+            <InstallExtension lead="Only this site's own capabilities are reachable — a page cannot call tools on another origin, whatever is driving it. Everything here still works, and an agent can list, compose, run and inspect through document.modelContext. The extension adds every WebMCP site you have visited." />
+          )
         ) : null}
 
         {tab === 'workflows' ? (
