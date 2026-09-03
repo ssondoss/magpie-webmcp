@@ -118,8 +118,43 @@ Two halves, either usable alone:
   do for itself.
 
 The division is deliberate. `document.modelContext` is per-document: no page can see another page's
-tools, however capable the agent driving it. That gap is browser-shaped, so an extension is the only
-place to close it without a backend.
+tools, however capable the agent driving it. A tool is not an endpoint either — `registerTool()` hands
+over a *function*, which lives in that page's heap and can only be called from inside it. So there is
+nothing for another origin to fetch even if it knew the name. That gap is browser-shaped, and an
+extension is the only place to close it without a backend.
+
+### Why not just use an agentic browser?
+
+Worth answering with the harder version of the question first: **this is not a new capability, and
+neither was WebMCP.** Agents operated websites long before the spec — scraping the DOM, reading
+accessibility trees, driving a mouse. What WebMCP added was a *contract*: the site declares what it
+supports, with types, instead of the agent inferring intent from markup and breaking on the next
+redesign. Magpie does the same thing one layer up — a contract *across* pages rather than within one.
+
+So the answer is not that an agentic browser cannot reach across origins. It can. An in-app browser is
+not a page; it hosts pages, so the same-origin policy does not apply to it. It sits at the same
+privilege level this extension does.
+
+It can also open a closed tab, and a model with memory may well recall that a site had a useful tool.
+So the difference is not reach, and not whether memory exists — it is whether any of it is
+**structured and guaranteed**:
+
+| | In-app browser | This extension |
+|---|---|---|
+| Reach across origins | yes | yes |
+| Open a site that is not currently open | yes | yes |
+| Knows *which* closed site provides a named capability | only if the model happens to recall it | an indexed registry, by design |
+| Stored input schemas, and drift detected against them | no | schema hash, order-insensitive |
+| Explicit capability status before running | no | `AVAILABLE`, `SITE_CLOSED`, `AUTH_REQUIRED`, `TOOL_CHANGED`, `TOOL_MISSING` |
+| A hallucinated capability is refused | no guarantee | `assertToolsExist()`, with the real names listed |
+| The same request runs the same steps twice | regenerated each time | a saved workflow replays its references |
+| What ran is recorded by the engine, not narrated by the agent | no | run history, per step |
+
+The last three are the ones that matter. An agent can do all of this on a good day; Magpie is what
+makes it the same on a bad one. A saved workflow is a set of stored references resolved against what
+is live right now — not a plan re-derived, and possibly re-derived differently, on every request. And
+because the engine writes the run record rather than the agent reporting on itself, a step marked `ok`
+genuinely ran.
 
 ## Quick start
 
@@ -300,13 +335,13 @@ Support can be signed out, which is how `AUTH_REQUIRED` is demonstrated.
 
 ## Tests
 
-`npm test` runs three suites — **56 tests**, no browser required:
+`npm test` runs three suites — **57 tests**, no browser required:
 
 - **Extension core** (37, `tests/core.test.ts`) — reference resolution, every transform operation,
   the step contract, namespacing, schema-hash stability. The engine runs end to end against a
   `chrome.*` stub: a gate stops the steps below it and **fails closed when its data never arrived**,
   and a declined `reason` step is a stop rather than a failure.
-- **The site** (19, `tests/web.test.ts`) — the tool surface, real execution of the seeded workflows,
+- **The site** (20, `tests/web.test.ts`) — the tool surface, real execution of the seeded workflows,
   cross-site delegation, invented capabilities refused with the real ones named, and the approval
   prompt an agent cannot answer for itself. The extension is stubbed at the `window.postMessage`
   seam, so the real client is exercised rather than a mock.

@@ -447,6 +447,47 @@ test('list_capabilities describes the surface to an agent', async () => {
   assert.equal(byName.get('delete_workflow')?.readOnly, false);
 });
 
+test('every seeded workflow is a valid, self-consistent plan', async () => {
+  const { planSchema } = await import('../src/shared/schema');
+
+  // Seeds are written straight into the store, so they never pass through
+  // parseSteps the way an agent's steps do. Without this, a typo in a seed is
+  // found by a visitor pressing Run on the front page.
+  for (const workflow of SEED.workflows) {
+    const parsed = planSchema.safeParse({
+      name: workflow.name,
+      status: 'SUPPORTED',
+      steps: workflow.steps,
+    });
+    assert.ok(parsed.success, `${workflow.name}: not a valid plan`);
+
+    // `requires` drives the "N sites" chip and the pre-run capability check, so it
+    // has to match what the steps actually call.
+    const called = [
+      ...new Set(workflow.steps.flatMap((step) => (step.type === 'tool' ? [step.tool] : []))),
+    ].sort();
+    assert.deepEqual([...workflow.requires].sort(), called, `${workflow.name}: requires does not match its steps`);
+
+    // Every reference must already exist — the wiring the engines only check at
+    // run time, and the thing most easily broken by editing a seed.
+    const produced = new Set<string>();
+    for (const step of workflow.steps) {
+      const references = new Set<string>();
+      if (step.type === 'transform') {
+        references.add(step.input.replace(/[{}]/g, '').trim().split('.')[0]);
+      }
+      for (const match of JSON.stringify(step).matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
+        references.add(match[1].trim().split('.')[0]);
+      }
+      for (const reference of references) {
+        if (reference === 'item') continue; // bound per element by forEach
+        assert.ok(produced.has(reference), `${workflow.name}/${step.id}: reads "${reference}" before it exists`);
+      }
+      if ('output' in step && step.output) produced.add(step.output);
+    }
+  }
+});
+
 test('runs can be deleted one at a time, or all at once', async () => {
   extension.online = false;
   forgetReachable();
